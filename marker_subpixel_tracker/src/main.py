@@ -29,6 +29,45 @@ def resolve_path(value, config_path):
     return PROJECT_ROOT / path
 
 
+def is_openvino_model(path):
+    """Return True for an Ultralytics OpenVINO IR model directory."""
+    path = Path(path)
+    return path.is_dir() and any(path.glob("*.xml"))
+
+
+def select_model_weights(model_cfg, config_path, explicit=None):
+    """Select explicit weights, otherwise prefer bundled OpenVINO over .pt."""
+    if explicit:
+        return resolve_path(explicit, config_path)
+
+    roots = (PROJECT_ROOT, WORKSPACE_ROOT, config_path.parent,
+             config_path.parent.parent)
+    candidates = []
+    for key in ("openvino_weights", "openvino_model", "openvino_dir"):
+        value = model_cfg.get(key)
+        if value:
+            candidates.append(resolve_path(value, config_path))
+    configured = model_cfg.get("weights")
+    model_stem = Path(configured).stem if configured else "marker26_det"
+    names = [f"{model_stem}_openvino_model"]
+    names.extend(name for name in (
+        "marker26_det_openvino_model", "marker26s_det_openvino_model"
+    ) if name not in names)
+    for name in names:
+        candidates.extend(root / name for root in roots)
+    for candidate in candidates:
+        if is_openvino_model(candidate):
+            return candidate
+
+    fallback = resolve_path(configured, config_path) if configured else PROJECT_ROOT / "marker26_det.pt"
+    if fallback.is_file():
+        return fallback
+    raise FileNotFoundError(
+        "未找到可用的 OpenVINO 模型目录或 .pt 权重文件。"
+        f" OpenVINO 候选: {', '.join(str(p) for p in candidates)}; .pt 回退: {fallback}"
+    )
+
+
 def probe_source_fps(source):
     """Return the source video's FPS; 10.0 default for image sequences.
 
@@ -206,15 +245,13 @@ def main():
     tracking_cfg = cfg.get("tracking", {})
     source = resolve_path(args.video or source_cfg["input"], config_path)
     camera = args.camera if args.camera is not None else camera_source_from_config(source_cfg)
-    weights = resolve_path(model_cfg["weights"], config_path)
+    weights = select_model_weights(model_cfg, config_path)
+    print(f"[marker_subpixel_tracker] 使用推理模型: {weights}")
     output_csv = resolve_path(source_cfg["output_csv"], config_path)
     output_dir = resolve_path(source_cfg["output_dir"], config_path)
     output_video = resolve_path(source_cfg["output_video"], config_path)
     output_dir.mkdir(parents=True, exist_ok=True)
     output_csv.parent.mkdir(parents=True, exist_ok=True)
-    if not weights.exists():
-        raise FileNotFoundError(f"模型不存在: {weights}，请将 marker26_det.pt 放到工作区或修改 config.yaml")
-
     tracker = ByteTrackTracker(weights, model_cfg["confidence"], model_cfg["class_id"],
                                model_cfg["device"], tracker=tracking_cfg.get("tracker", "bytetrack.yaml"),
                                persist=tracking_cfg.get("persist", True))

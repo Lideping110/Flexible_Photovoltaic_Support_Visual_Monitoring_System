@@ -15,7 +15,8 @@ import numpy as np
 import yaml
 
 from .main import (camera_source_from_config, load_frames, load_realtime_frames,
-                   open_camera, resolve_path)
+                   is_openvino_model, open_camera, resolve_path,
+                   select_model_weights)
 from .pipeline import localize_one
 from .tracker import ByteTrackTracker, MultiTargetTracker
 from .features import measure_outer_diameter_px
@@ -105,9 +106,15 @@ def main():
     realtime = cap is not None
     if camera is not None and not realtime:
         print(f"[realtime] camera unavailable, fallback to {fallback}")
-    weights = resolve_path(args.weights or model_cfg["weights"], cfg_path)
+    weights = select_model_weights(model_cfg, cfg_path, args.weights)
+    if not weights.exists():
+        raise FileNotFoundError(
+            f"模型不存在: {weights}；请放置 OpenVINO 模型目录或 .pt 权重"
+        )
+    device = args.device or model_cfg.get("device", "cpu")
+    print(f"[realtime] model={weights} ({'OpenVINO' if is_openvino_model(weights) else '.pt'}) device={device}")
     tracker = ByteTrackTracker(weights, model_cfg.get("confidence", .25),
-                               model_cfg.get("class_id", 0), args.device or model_cfg.get("device", "cpu"),
+                               model_cfg.get("class_id", 0), device,
                                tracker=cfg.get("tracking", {}).get("tracker", "bytetrack.yaml"),
                                persist=True)
     compute_fft = compute_segment_fft

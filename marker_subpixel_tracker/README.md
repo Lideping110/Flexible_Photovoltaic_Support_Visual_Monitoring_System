@@ -19,7 +19,13 @@ CSV 列：`frame, time_s, detected, method, det_conf, track_id, lambda_min, cont
 
 ## 运行
 
-将 `marker26_det.pt` 放在工作区根目录，修改 `config/config.yaml` 的输入源后运行：
+推理模型按以下顺序选择：先查找配置项 `model.openvino_dir`（也接受
+`openvino_model` 或 `openvino_weights`），再扫描工作区和项目目录下的
+`marker26s_det_openvino_model`、`marker26_det_openvino_model`；找到包含 `.xml`
+的 OpenVINO 导出目录后直接使用。没有可用 OpenVINO 目录时，回退到
+`model.weights` 指定的 `.pt` 文件。可通过命令行 `--weights` 显式指定模型以覆盖自动选择。
+
+修改 `config/config.yaml` 的输入源后运行：
 
 ```powershell
 uv run marker_subpixel_tracker --config marker_subpixel_tracker/config/config.yaml
@@ -35,6 +41,8 @@ used as the video fallback. Add `--no-display` for headless processing, or
 `--camera rtsp://...` / `--camera 0`）。摄像头无法打开时会自动回退到
 `source.input` 视频文件；也可用 `--video path/to/file.mp4` 临时覆盖回退视频。
 加 `--display` 可打开实时标注窗口，按 `q` 退出。
+
+每次启动会打印最终选中的推理模型路径。
 
 也可以直接使用配置文件中的默认路径运行：
 

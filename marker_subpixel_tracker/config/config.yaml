@@ -3,7 +3,7 @@ source:
   camera_url: "rtsp://admin:hhjt110110@192.168.1.64:554/streaming/Channels/101"
   # Optional camera/RTSP source. When set, the entry point uses it first;
   # if opening fails it automatically falls back to input below.
-  camera_url: null
+  # camera_url: null
   # Supports a video file, one image, or an image glob/directory.
   input: "babiao/fast_move_shorter.mp4"
   output_video: "output/move_marker_tracking.mp4"
@@ -13,7 +13,9 @@ source:
   display: false
 
 model:
-  # Path is resolved relative to the workspace root or this config file.
+  # OpenVINO 导出目录优先；目录中需包含 .xml 文件。未配置或未找到时回退到 weights。
+  openvino_dir: "marker26_det_openvino_model"
+  # .pt 回退权重，路径相对工作区根目录或本配置文件。
   weights: "marker26_det.pt"
   confidence: 0.25
   class_id: 0
