@@ -357,14 +357,10 @@ def draw_realtime(frame, measured, fps, per_calib=None):
         cv2.putText(out, id_label, (x1, max(18, y1 - 8)),
                     cv2.FONT_HERSHEY_SIMPLEX, 0.55, (0, 255, 255), 2,
                     cv2.LINE_AA)
-        # 中心点(红十字 + 圆点) + 坐标
+        # 中心点：仅绘制一个细线小十字，避免遮挡靶标细节。
         if m["center"] is not None:
             p = tuple(np.round(m["center"]).astype(int))
-            cv2.drawMarker(out, p, (0, 0, 255), cv2.MARKER_CROSS, 22, 2)
-            cv2.circle(out, p, 6, (0, 0, 255), 2)
-            cv2.putText(out, f"({m['center'][0]:.2f}, {m['center'][1]:.2f})",
-                        (p[0] + 16, p[1] - 16), cv2.FONT_HERSHEY_SIMPLEX,
-                        0.5, (0, 0, 255), 2, cv2.LINE_AA)
+            cv2.drawMarker(out, p, (0, 0, 255), cv2.MARKER_CROSS, 10, 1)
 
     # 左上状态面板(黑底白字)：目标数 + fps + 每个目标的 center/dx-dy
     panel_lines = [f"targets={len(measured)}   fps={fps:.1f}"]

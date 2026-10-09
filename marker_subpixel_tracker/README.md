@@ -42,6 +42,11 @@ used as the video fallback. Add `--no-display` for headless processing, or
 `source.input` 视频文件；也可用 `--video path/to/file.mp4` 临时覆盖回退视频。
 加 `--display` 可打开实时标注窗口，按 `q` 退出。
 
+实时可视化与 `marker_tracing` 保持一致：主窗口显示跟踪框、亚像素中心、
+FPS 和位移状态；“位移时程 + 频谱图”窗口显示带数值刻度和图例的位移曲线，
+每个完整 `--fft-win` 时间段完成后追加频谱曲线和主频标注。可用
+`--plot-axis dx|dy|both`、`--seg-max N` 和 `--fmax Hz` 调整频谱显示。
+
 每次启动会打印最终选中的推理模型路径。
 
 也可以直接使用配置文件中的默认路径运行：

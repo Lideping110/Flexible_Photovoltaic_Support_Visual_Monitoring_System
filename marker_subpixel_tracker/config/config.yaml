@@ -14,12 +14,12 @@ source:
 
 model:
   # OpenVINO 导出目录优先；目录中需包含 .xml 文件。未配置或未找到时回退到 weights。
-  openvino_dir: "marker26_det_openvino_model"
+  openvino_dir: "marker26s_det_openvino_model"
   # .pt 回退权重，路径相对工作区根目录或本配置文件。
-  weights: "marker26_det.pt"
+  weights: "marker26s_det.pt"
   confidence: 0.25
   class_id: 0
-  device: "cpu"
+  device: "intel:gpu"
 
 tracking:
   # ByteTrack 跟踪：一次 model.track() 前向同时得到检测框和持久轨迹 ID

@@ -201,7 +201,7 @@ def draw_results(image, measured):
                     cv2.LINE_AA)
         if m["center"] is not None:
             p = tuple(np.round(m["center"]).astype(int))
-            cv2.drawMarker(out, p, (0, 0, 255), cv2.MARKER_CROSS, 18, 2)
+            cv2.drawMarker(out, p, (0, 0, 255), cv2.MARKER_CROSS, 10, 1)
     label = f"targets={len(measured)}"
     cv2.putText(out, label, (20, 35), cv2.FONT_HERSHEY_SIMPLEX,
                 0.8, (0, 0, 0), 4, cv2.LINE_AA)
