@@ -1,0 +1,15 @@
+{
+    "version": "0.2.0",
+    "configurations": [
+        {
+            "name": "Debug pole_tilt_monitor",
+            "type": "debugpy",
+            "request": "launch",
+            "module": "pole_tilt_monitor.src.main",
+            "cwd": "${workspaceFolder}",
+            "console": "integratedTerminal",
+            "justMyCode": false,
+            "args": []
+        }
+    ]
+}

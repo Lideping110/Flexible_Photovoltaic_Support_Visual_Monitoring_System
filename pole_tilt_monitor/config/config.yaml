@@ -1,0 +1,114 @@
+video:
+  # 相对路径统一以工作区根目录 D:/摄像头拉流 为基准。
+  # 视频输入源：可以是视频文件路径，也可以是摄像头编号字符串（如 "0" 表示 0 号摄像头）
+  source: "video/1080.mp4"
+  # 带标注结果视频的输出路径（save_video 为 true 时才写出）
+  output_video: "pole_tilt_monitor/output/1080_exp6_result.mp4"
+  # 每帧每根立柱测量结果的 CSV 输出路径
+  output_csv: "pole_tilt_monitor/output/1080_exp6_result.csv"
+  # 是否弹出窗口实时显示标注画面（按 q 或 ESC 退出）
+  display: false
+  # 是否把标注后的画面写成结果视频文件
+  save_video: true
+  # 每秒处理的帧数。1.0 表示每秒抽取并处理一帧；不超过源视频 FPS。
+  sample_fps: 1.0
+
+models:
+  # Supply one trained Ultralytics YOLO26 instance-segmentation checkpoint.
+  # Its track() result provides boxes, ByteTrack IDs and masks in one pass.
+  # YOLO26 实例分割模型权重路径（一次前向同时得到检测框、ByteTrack 跟踪 ID 和分割掩码）
+  instance_segmentation: "pole26_seg.pt"
+  # 立柱类别在模型中的类别 ID（track 时只保留该类别，classes=[pole_class_id]）
+  pole_class_id: 0
+  # 检测置信度阈值：低于该置信度的检测框会被过滤掉（值越高误检越少但可能漏检）
+  confidence: 0.25
+  # 推理设备："cpu" 用 CPU；有 CUDA GPU 时可改成 "0"（第 0 块 GPU）
+  device: "cpu"      # 本次测试环境无 CUDA；有 GPU 时可改为 "0"
+  # Ultralytics tracker configuration. ByteTrack keeps IDs stable through
+  # short occlusions and detector confidence fluctuations.
+  # 跟踪器配置文件名（Ultralytics 内置），ByteTrack 能在短时遮挡和置信度波动时保持 ID 稳定
+  tracker: "bytetrack.yaml"
+  # 帧间记忆开关：true 表示跟踪器在帧与帧之间保持状态（连续视频必须为 true）
+  persist: true
+
+measurement:
+  # world_3d uses R,t and ground/length constraints. image_relative uses only
+  # K/dist and compares undistorted centerline direction to the baseline.
+  # 测量模式："world_3d"=利用外参 R/t、地面平面和杆长约束恢复世界坐标系 3D 倾角；
+  #           "image_relative"=只用内参 K/畸变系数，在去畸变图像上比较当前中轴线与基准方向的相对变化
+  mode: "image_relative"
+  # 立柱实际长度（米），仅 world_3d 模式使用：由地面交点沿视线方向推算杆顶点
+  pole_length_m: 3.0
+  # 地面/支撑平面的高度 Z 值（米），仅 world_3d 模式使用：杆底点取视线与 Z=ground_z 平面的交点
+  ground_z_m: 0.0
+  # 端点提取比例：在拟合直线的两端各取"线段总长的这个比例"范围内的点求平均作为杆顶/杆底，
+  # 代码内会被裁剪到 [0.02, 0.25]；值越大端点越稳定但端点位置越靠内
+  endpoint_ratio: 0.10
+  # RANSAC 直线拟合的内点判定阈值（像素）：中心线点到直线的垂直距离小于该值才算内点
+  ransac_residual_px: 2.5
+  # RANSAC 最大迭代次数：越多越稳定但越慢（一般 300 足够）
+  ransac_iterations: 300
+  # 主线拟合时从投影两端剔除的比例。用于隔离底座、顶部连接件等端部结构，
+  # 端点仍会沿主线投影恢复，端部偏差进入质量分而不直接导致单帧无效。
+  body_trim_ratio: 0.10
+  # Frames below this score are emitted as INVALID and excluded from EMA and
+  # baseline estimation.
+  # 质量分阈值（0~1）：综合质量分低于该值的帧被标记 INVALID，不参与 EMA 平滑也不参与基准估计
+  quality_threshold: 0.60
+  # 视线与地面平面的最小夹角（度），仅 world_3d 模式使用：夹角太小（视线近乎平行地面）时深度估计不稳定
+  min_ray_plane_angle_deg: 5.0
+  # 中心线拟合 RMS 残差的上限参考值（像素）：残差通过 exp(-残差/该值) 折算成质量分
+  max_centerline_residual_px: 4.0
+  # 端点抖动上限参考值（像素）：顶/底端点离散度通过 exp(-离散度/该值) 折算成质量分，
+  # 同时也用于帧间端点时间稳定性评分
+  max_endpoint_spread_px: 4.0
+  # 杆长约束的误差比例上限参考值，仅 world_3d 模式使用：
+  # |重建杆长-标称杆长|/标称杆长 通过 exp(-误差/该值) 折算成质量分
+  max_length_error_ratio: 0.03
+  # 综合质量分的加权权重（各项 0~1 的子分数加权平均；image_relative 模式下
+  # ray_ground_angle 和 length_constraint 会被强制置 0 权重）
+  quality_weights:
+    # RANSAC 内点比例权重：掩码中心线点中落入拟合直线的比例，越高说明杆身越直、掩码越干净
+    inlier_ratio: 0.30
+    # 中心线残差权重：拟合直线 RMS 残差越小分数越高
+    centerline_residual: 0.25
+    # 杆顶端点稳定性权重：顶部候选点相对直线的横向离散度越小分数越高
+    top_stability: 0.12
+    # 杆底端点稳定性权重：底部候选点相对直线的横向离散度越小分数越高
+    bottom_stability: 0.12
+    # 视线-地面夹角权重（仅 world_3d 生效）：夹角越接近/超过 min_ray_plane_angle_deg 分数越高
+    ray_ground_angle: 0.10
+    # 杆长约束权重（仅 world_3d 生效）：重建杆长与 pole_length_m 的偏差越小分数越高
+    length_constraint: 0.11
+
+baseline:
+  # 是否启用逐杆基准估计（false 时 delta 永远不可用，一般保持 true）
+  enabled: true
+  # world_3d 模式下：建立基准所需的连续有效帧数（每根杆累计够这么多有效帧后取中位数作为基准；
+  # 设 1 表示用第一帧有效结果直接当基准）
+  frames: 60 # world_3d mode only; 1 means first valid frame baseline.
+  # image_relative 模式下：建立基准所需的连续有效帧数（1 表示用第一帧有效结果直接当基准）
+  relative_frames: 1
+  # 预热帧数：当前代码中未被使用（仅保留字段，无实际作用）
+  warmup_frames: 60
+
+filter:
+  # 是否启用 EMA 平滑（代码中未读取此开关，平滑始终生效，调整 alpha 即可）
+  enabled: true
+  # EMA 平滑系数（0~1）：delta = alpha*当前值 + (1-alpha)*历史值；
+  # 越小输出越平滑但响应越慢，越大越灵敏但抖动越大
+  alpha: 0.25
+
+alarm:
+  # 报警阈值（度）：当前左右倾角相对基准的变化量绝对值 >= 该值时画面标 ALARM
+  left_right_deg: 2.0
+  # 报警阈值（度）：前后倾角变化量绝对值 >= 该值时报警（image_relative 模式下恒为 0，不会触发）
+  front_back_deg: 2.0
+  # 报警阈值（度）：总倾角变化量 >= 该值时报警
+  total_deg: 2.5
+
+debug:
+  # 保存第 0 帧画面中最左侧立柱的逐步诊断图和 metrics.json。
+  enabled: true
+  frame_id: 0
+  output_dir: "pole_tilt_monitor/output/diagnostics"

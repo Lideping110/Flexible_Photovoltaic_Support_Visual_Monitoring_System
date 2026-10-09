@@ -1,0 +1,33 @@
+[project]
+name = "pole-tilt-monitor"
+version = "0.1.0"
+description = "YOLO26 instance-segmentation and ByteTrack pole tilt monitor"
+readme = "pole_tilt_monitor/README.md"
+requires-python = ">=3.13"
+dependencies = [
+    "lap>=0.5.13",
+    "numpy>=2.5.3",
+    "opencv-contrib-python>=5.0.0.93",
+    "openvino>=2026.4.0",
+    "pyyaml>=6.0",
+    "ultralytics>=8.4.147",
+]
+
+[project.scripts]
+pole_tilt_monitor = "pole_tilt_monitor.src.main:main"
+marker_subpixel_tracker = "marker_subpixel_tracker.src.realtime:main"
+
+[build-system]
+requires = ["setuptools>=77"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+include = ["pole_tilt_monitor*", "marker_subpixel_tracker*"]
+
+[tool.uv]
+cache-dir = ".uv-cache"
+
+[[tool.uv.index]]
+name = "tsinghua"
+url = "https://pypi.tuna.tsinghua.edu.cn/simple"
+default = true

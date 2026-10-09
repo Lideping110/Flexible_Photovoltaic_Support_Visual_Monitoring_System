@@ -1,0 +1,46 @@
+{
+  "pole_id": 1,
+  "frame_id": 0,
+  "box": [
+    229.2456817626953,
+    0.0,
+    315.6811828613281,
+    943.7653198242188
+  ],
+  "raw_mask_area_px": 38485,
+  "clean_mask_area_px": 38485,
+  "skeleton_pixels": 909,
+  "centerline_points": 892,
+  "ransac_inlier_count": 713,
+  "ransac_inlier_ratio": 0.7993273542600897,
+  "ransac_residual_rms_px": 1.1730692989949223,
+  "projection_min": -408.48768290027874,
+  "projection_max": 468.166156139678,
+  "endpoint_span_px": 876.6538390399567,
+  "endpoint_ratio": 0.1,
+  "endpoint_perpendicular_gate_px": 2.9326732474873056,
+  "top_band_count": 103,
+  "bottom_band_count": 88,
+  "top_candidate_count": 88,
+  "bottom_candidate_count": 0,
+  "top_fallback": false,
+  "bottom_fallback": true,
+  "body_trim_ratio": 0.1,
+  "body_point_count": 714,
+  "failure_stage": null,
+  "reason": "通过端点筛选",
+  "top": [
+    248.73406234130755,
+    43.45955289055149
+  ],
+  "bottom": [
+    292.18866083170053,
+    832.1039021005628
+  ],
+  "top_endpoint_source": "skeleton",
+  "bottom_endpoint_source": "skeleton",
+  "top_endpoint_deviation_px": 0.735175822228026,
+  "bottom_endpoint_deviation_px": 7.199565132642675,
+  "skeleton_mask_height_coverage": 0.9711751662971175,
+  "coverage_tolerance_px": 27.06
+}

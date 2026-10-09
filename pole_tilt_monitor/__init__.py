@@ -1,0 +1,1 @@
+"""Pole tilt monitoring application."""

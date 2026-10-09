@@ -1,0 +1,58 @@
+source:
+  # 摄像头优先；不可用时自动回退到 input 视频文件。
+  camera_url: "rtsp://admin:hhjt110110@192.168.1.64:554/streaming/Channels/101"
+  # Optional camera/RTSP source. When set, the entry point uses it first;
+  # if opening fails it automatically falls back to input below.
+  camera_url: null
+  # Supports a video file, one image, or an image glob/directory.
+  input: "babiao/fast_move_shorter.mp4"
+  output_video: "output/move_marker_tracking.mp4"
+  output_csv: "output/move_marker_tracking.csv"
+  output_dir: "output/move_frames"
+  save_video: true
+  display: false
+
+model:
+  # Path is resolved relative to the workspace root or this config file.
+  weights: "marker26_det.pt"
+  confidence: 0.25
+  class_id: 0
+  device: "cpu"
+
+tracking:
+  # ByteTrack 跟踪：一次 model.track() 前向同时得到检测框和持久轨迹 ID
+  # 跟踪器配置文件名（Ultralytics 内置），短时遮挡和置信度波动时保持 ID 稳定
+  tracker: "bytetrack.yaml"
+  # 帧间记忆开关：连续视频必须为 true
+  persist: true
+  # 锁定的目标轨迹 ID；null 表示自动锁定首个置信度最高的轨迹
+  target_id: null
+  # 锁定目标连续丢失超过该帧数后，自动重锁当前置信度最高的新轨迹；0 表示永不重锁
+  reacquire_after_frames: 30
+
+localization:
+  # 定位方法：Shi-Tomasi λ_min（结构张量最小特征值，论文 Eqs. 7-9）
+  # + 锚点窗口选峰 + cornerSubPix 亚像素精化。测点即「黑白交界的角点」。
+  # Harris/structure-tensor parameters from the paper's Eqs. 7-9.
+  structure_sigma: 1.5
+  # 选峰有效性的最小 lambda_min 阈值：低于此值的峰视为无效（运动模糊/无真纹理
+  # 时诚实报丢失，而非硬测垃圾）。5000 依据：快速场景真纹理 λ 最低约 5089、
+  # 纯噪声 λ < 1000，中间有明显分界；静态场景 λ > 72000 远高于此。
+  min_lambda_min: 5000.0
+  # Subpixel refinement window for the single central point.
+  subpixel_window: 5
+  # 选峰窗口半径（解决远距 ROI 小于固定窗 -> 退化全局 argmax -> 角点翻转）：
+  # 默认走「靶标短边比例」窗  radius = clamp(win_ratio * ROI短边, 3, win_max)。
+  # 远距 ROI 缩小，窗随之缩小，始终只罩中心圆点周围一小块。
+  # （固定窗 continuity_radius_px 已废弃；保留仅为旧测试向后兼容，项目不再使用）
+  win_ratio: 0.25
+  win_max: 20
+  # 窗内局部峰最小间距(px)，用于去歧义
+  min_spacing: 5
+  # 跳变帧门控阈值(px/帧)：亚像素中心跳变超过此值（而检测框几乎未动）即判定为
+  # 角点翻转，沿用上一帧测量并标记 non-continuous
+  max_jump_px: 3.0
+
+runtime:
+  # Set to true to write annotated frames.
+  save_debug: true

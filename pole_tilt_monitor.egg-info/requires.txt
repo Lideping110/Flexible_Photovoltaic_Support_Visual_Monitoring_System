@@ -1,0 +1,6 @@
+lap>=0.5.13
+numpy>=2.5.3
+opencv-contrib-python>=5.0.0.93
+openvino>=2026.4.0
+pyyaml>=6.0
+ultralytics>=8.4.147
