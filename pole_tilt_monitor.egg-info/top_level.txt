@@ -1,2 +1,0 @@
-marker_subpixel_tracker
-pole_tilt_monitor

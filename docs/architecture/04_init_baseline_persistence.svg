@@ -1,0 +1,37 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 680 470" width="680" height="470" role="img">
+<title>初始基准持久化：首帧保存与重启加载</title>
+<desc>推理进程收到每摄像头首张成功帧时检查初始化文件，存在则加载锚点与基准不再保存，不存在则推理建立锚点并原子保存初始图片与初始数据</desc>
+<defs>
+<marker id="arrow" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+<path d="M2 1L8 5L2 9" fill="none" stroke="context-stroke" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+</marker>
+</defs>
+<rect x="0" y="0" width="680" height="470" fill="#2B2B28"/>
+<text x="40" y="42" dominant-baseline="central" font-size="15" font-weight="500" fill="#D3D1C7" font-family="sans-serif">初始基准持久化 · 两个分支同理（pole / marker）</text>
+<rect x="40" y="70" width="600" height="52" rx="8" fill="#444441" stroke="#888780" stroke-width="0.5"/>
+<text x="340" y="90" text-anchor="middle" dominant-baseline="central" font-size="13" font-weight="500" fill="#D3D1C7" font-family="sans-serif">推理进程收到某摄像头首张成功帧（检测非空 · 图像可用）</text>
+<text x="340" y="110" text-anchor="middle" dominant-baseline="central" font-size="11" fill="#B4B2A9" font-family="sans-serif">立柱分支：首个含立柱的 1fps 帧；靶标分支：首个锁定靶标的帧</text>
+<path d="M340 122 V142" fill="none" stroke="#888780" stroke-width="1.5" marker-end="url(#arrow)"/>
+<rect x="230" y="144" width="220" height="44" rx="22" fill="#0C447C" stroke="#85B7EB" stroke-width="0.5"/>
+<text x="340" y="166" text-anchor="middle" dominant-baseline="central" font-size="13" font-weight="500" fill="#B5D4F4" font-family="sans-serif">init_state.json 已存在？</text>
+<path d="M230 166 H120 V200" fill="none" stroke="#888780" stroke-width="1.5" marker-end="url(#arrow)"/>
+<text x="170" y="156" text-anchor="middle" dominant-baseline="central" font-size="12" fill="#9FE1CB" font-family="sans-serif">是 · 项目重启</text>
+<path d="M450 166 H560 V200" fill="none" stroke="#888780" stroke-width="1.5" marker-end="url(#arrow)"/>
+<text x="520" y="156" text-anchor="middle" dominant-baseline="central" font-size="12" fill="#FAC775" font-family="sans-serif">否 · 首次运行</text>
+<rect x="40" y="204" width="280" height="100" rx="8" fill="#085041" stroke="#5DCAA5" stroke-width="0.5"/>
+<text x="180" y="224" text-anchor="middle" dominant-baseline="central" font-size="13" font-weight="500" fill="#9FE1CB" font-family="sans-serif">加载持久化初始状态</text>
+<text x="180" y="244" text-anchor="middle" dominant-baseline="central" font-size="11" fill="#5DCAA5" font-family="sans-serif">锚点框 + 持久 ID · 逐杆初始角度基准</text>
+<text x="180" y="262" text-anchor="middle" dominant-baseline="central" font-size="11" fill="#5DCAA5" font-family="sans-serif">靶标初始位置 + mm/px 标定值</text>
+<text x="180" y="280" text-anchor="middle" dominant-baseline="central" font-size="11" fill="#5DCAA5" font-family="sans-serif">跳过基准建立期 · delta 延续重启前</text>
+<rect x="360" y="204" width="280" height="100" rx="8" fill="#633806" stroke="#EF9F27" stroke-width="0.5"/>
+<text x="500" y="224" text-anchor="middle" dominant-baseline="central" font-size="13" font-weight="500" fill="#FAC775" font-family="sans-serif">建立并保存初始状态</text>
+<text x="500" y="244" text-anchor="middle" dominant-baseline="central" font-size="11" fill="#EF9F27" font-family="sans-serif">首帧推理 → 生成锚点（框·持久ID·初始角度）</text>
+<text x="500" y="262" text-anchor="middle" dominant-baseline="central" font-size="11" fill="#EF9F27" font-family="sans-serif">init_frame.jpg + init_state.json</text>
+<text x="500" y="280" text-anchor="middle" dominant-baseline="central" font-size="11" fill="#EF9F27" font-family="sans-serif">原子写：tmp 文件 → rename，防崩溃半写</text>
+<path d="M500 304 V330" fill="none" stroke="#888780" stroke-width="1.5" marker-end="url(#arrow)"/>
+<rect x="360" y="332" width="280" height="44" rx="8" fill="#412402" stroke="#BA7517" stroke-width="0.5"/>
+<text x="500" y="354" text-anchor="middle" dominant-baseline="central" font-size="11" fill="#FAC775" font-family="sans-serif">版本号 + 创建时间写头部，schema 变更可检测</text>
+<rect x="40" y="400" width="600" height="52" rx="8" fill="#444441" stroke="#888780" stroke-width="0.5"/>
+<text x="340" y="420" text-anchor="middle" dominant-baseline="central" font-size="12" fill="#D3D1C7" font-family="sans-serif">存储位置：output/{pole|marker}/{cam_id}/init/</text>
+<text x="340" y="440" text-anchor="middle" dominant-baseline="central" font-size="11" fill="#B4B2A9" font-family="sans-serif">init_frame.jpg · init_state.json · 换新摄像头或标定变更时 --refresh-init 强制重建</text>
+</svg>

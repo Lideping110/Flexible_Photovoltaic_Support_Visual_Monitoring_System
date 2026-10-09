@@ -1,0 +1,43 @@
+{
+  "version": 1,
+  "cam_id": "marker_cam_01",
+  "branch": "marker",
+  "created_at": "2026-10-09T17:38:20+08:00",
+  "init_frame": "init_frame.jpg",
+  "targets": [
+    {
+      "pid": "M1",
+      "box": [
+        945.0,
+        371.0625,
+        1059.0,
+        485.4375
+      ],
+      "baseline": {
+        "center": [
+          999.5240478515625,
+          428.60443115234375
+        ],
+        "mm_per_px": 0.9211496154099155
+      },
+      "quality": null
+    },
+    {
+      "pid": "M2",
+      "box": [
+        1117.875,
+        244.125,
+        1225.125,
+        352.5
+      ],
+      "baseline": {
+        "center": [
+          1167.0,
+          298.0
+        ],
+        "mm_per_px": 0.9742790393087757
+      },
+      "quality": null
+    }
+  ]
+}

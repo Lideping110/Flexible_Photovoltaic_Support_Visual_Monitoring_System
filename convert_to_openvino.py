@@ -4,12 +4,11 @@
 与本项目推理后端严格对齐:
   - 推理后端: ultralytics YOLO, 加载含 .xml 的目录即自动走 OpenVINO(Intel GPU)。
   - 依赖: ultralytics>=8.4.147, openvino>=2026.4.0 (见 pyproject.toml)。
-  - 项目所有模型均为 YOLO (.pt): marker26_det.pt / yolo11n-seg.pt / yolo26s-seg.pt / pole26_seg.pt。
+  - 项目当前模型: pole26s_seg.pt(立柱分割) / marker26s_det.pt(靶标检测, 已导出 marker26s_det_openvino_model)。
 
-重要 — 默认加载名硬编码:
-  marker_tracing.py / calibrate_scale.py 里的 OPENVINO_DIR 写死为
-  "marker26_det_openvino_model"。因此新模型转完后, 推理必须显式指定:
-      uv run python marker_tracing.py --weights <新目录>
+重要 — config.yaml 的 marker_det.openvino_dir 写死为
+  "marker26s_det_openvino_model"。因此新模型转完后, 推理必须显式指定:
+      config.yaml -> models.marker_det.openvino_dir: <新目录>
   或对本脚本加 --link-default 把新目录复制为该默认名(会自动备份旧模型)。
 
 用法:
@@ -44,7 +43,7 @@ def parse_args() -> argparse.Namespace:
     p.add_argument("--device", default="cpu",
                    help="导出用设备 cpu / cuda:0, 默认 cpu")
     p.add_argument("--link-default", action="store_true",
-                   help="导出后复制为 marker26_det_openvino_model/ 供 marker_tracing 等默认加载"
+                   help="导出后复制为 marker26s_det_openvino_model/ 供 config.yaml 默认加载"
                         " (会先备份旧模型为 .bak)")
     return p.parse_args()
 
@@ -87,16 +86,16 @@ def export_onnx(src: Path, out_dir: Path, args: argparse.Namespace) -> Path:
 
 
 def link_default(out_dir: Path, script_dir: Path) -> None:
-    target = script_dir / "marker26_det_openvino_model"
+    target = script_dir / "marker26s_det_openvino_model"
     if target.exists():
-        bak = script_dir / "marker26_det_openvino_model.bak"
+        bak = script_dir / "marker26s_det_openvino_model.bak"
         if bak.exists():
             shutil.rmtree(bak)
         shutil.move(str(target), str(bak))
         print(f"[link] 已备份旧默认模型 -> {bak.name}")
     shutil.copytree(out_dir, target)
     print(f"[link] 已复制为默认加载名 {target.name} "
-          f"(marker_tracing / calibrate_scale 将自动使用)")
+          f"(config.yaml 的 marker_det.openvino_dir 将自动使用)")
 
 
 def main() -> int:
@@ -143,10 +142,9 @@ def main() -> int:
         link_default(out_dir, script_dir)
 
     print("\n[使用] 推理时指定权重:")
-    print(f"  uv run python marker_tracing.py --weights {out_dir}")
-    print(f"  uv run python calibrate_scale.py --weights {out_dir}")
+    print(f"  config.yaml -> models.marker_det.openvino_dir: {out_dir}")
     if not args.link_default:
-        print("  (或加 --link-default 设为默认加载名 marker26_det_openvino_model)")
+        print("  (或加 --link-default 设为默认加载名 marker26s_det_openvino_model)")
     return 0
 
 

@@ -1,0 +1,33 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 680 560" width="680" height="560" role="img">
+<title>config.yaml 单一配置文件结构</title>
+<desc>配置文件包含 cameras 摄像头清单（每摄像头含 id、url、task 角色与内联标定 K/dist/R/t）、models 模型、pole 与 marker 分支参数、runtime 运行参数五个顶层段；一条命令 uv run python main.py 启动全部。</desc>
+<rect x="0" y="0" width="680" height="560" fill="#2B2B28"/>
+<text x="40" y="44" dominant-baseline="central" font-size="15" font-weight="500" fill="#D3D1C7" font-family="sans-serif">config.yaml — 唯一配置文件</text>
+<text x="40" y="66" dominant-baseline="central" font-size="12" fill="#888780" font-family="sans-serif">一条命令：uv run python main.py --config config.yaml</text>
+<path d="M26 90 V538" fill="none" stroke="#5F5E5A" stroke-width="1" stroke-dasharray="3 3"/>
+<circle cx="26" cy="146" r="3" fill="#AFA9EC"/>
+<circle cx="26" cy="254" r="3" fill="#B4B2A9"/>
+<circle cx="26" cy="342" r="3" fill="#5DCAA5"/>
+<circle cx="26" cy="430" r="3" fill="#EF9F27"/>
+<circle cx="26" cy="510" r="3" fill="#85B7EB"/>
+<rect x="40" y="90" width="600" height="112" rx="10" fill="#3C3489" stroke="#AFA9EC" stroke-width="0.5"/>
+<text x="56" y="112" dominant-baseline="central" font-size="13" font-weight="500" fill="#CECBF6" font-family="sans-serif">cameras:  摄像头清单（id · url · task — 谁干什么在此指定）</text>
+<rect x="56" y="126" width="278" height="62" rx="8" fill="#26215C" stroke="#7F77DD" stroke-width="0.5"/>
+<text x="195" y="146" text-anchor="middle" dominant-baseline="central" font-size="12" fill="#CECBF6" font-family="sans-serif">cam_01 · rtsp://192.168.1.64/…</text>
+<text x="195" y="166" text-anchor="middle" dominant-baseline="central" font-size="11" fill="#AFA9EC" font-family="sans-serif">task: pole · 独立 K / dist / R / t</text>
+<rect x="346" y="126" width="278" height="62" rx="8" fill="#26215C" stroke="#7F77DD" stroke-width="0.5"/>
+<text x="485" y="146" text-anchor="middle" dominant-baseline="central" font-size="12" fill="#CECBF6" font-family="sans-serif">cam_02 · rtsp://192.168.1.65/…</text>
+<text x="485" y="166" text-anchor="middle" dominant-baseline="central" font-size="11" fill="#AFA9EC" font-family="sans-serif">task: marker · 独立 K / dist / R / t</text>
+<rect x="40" y="218" width="600" height="72" rx="10" fill="#444441" stroke="#B4B2A9" stroke-width="0.5"/>
+<text x="56" y="240" dominant-baseline="central" font-size="13" font-weight="500" fill="#D3D1C7" font-family="sans-serif">models:  pole_seg / marker_det</text>
+<text x="56" y="264" dominant-baseline="central" font-size="11" fill="#B4B2A9" font-family="sans-serif">各含 weights · openvino_dir · confidence · class_id · device · tracker</text>
+<rect x="40" y="306" width="600" height="72" rx="10" fill="#085041" stroke="#5DCAA5" stroke-width="0.5"/>
+<text x="56" y="328" dominant-baseline="central" font-size="13" font-weight="500" fill="#9FE1CB" font-family="sans-serif">pole:  立柱分支参数</text>
+<text x="56" y="352" dominant-baseline="central" font-size="11" fill="#5DCAA5" font-family="sans-serif">sample_fps: 1.0 · measurement(RANSAC/质量门控/EMA) · baseline · alarm</text>
+<rect x="40" y="394" width="600" height="72" rx="10" fill="#633806" stroke="#EF9F27" stroke-width="0.5"/>
+<text x="56" y="416" dominant-baseline="central" font-size="13" font-weight="500" fill="#FAC775" font-family="sans-serif">marker:  靶标分支参数</text>
+<text x="56" y="440" dominant-baseline="central" font-size="11" fill="#EF9F27" font-family="sans-serif">fft_window_s: 30 · localization(λmin 锚点/亚像素) · tracking · 直径标定</text>
+<rect x="40" y="482" width="600" height="56" rx="10" fill="#0C447C" stroke="#85B7EB" stroke-width="0.5"/>
+<text x="56" y="502" dominant-baseline="central" font-size="13" font-weight="500" fill="#B5D4F4" font-family="sans-serif">runtime:  运行参数</text>
+<text x="56" y="522" dominant-baseline="central" font-size="11" fill="#85B7EB" font-family="sans-serif">队列容量 · 攒批策略 · 初始基准持久化 · 断线重连 · 日志级别</text>
+</svg>

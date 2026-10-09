@@ -1,0 +1,164 @@
+# =====================================================================
+# 柔性光伏支架可视化监测系统 — 唯一配置文件
+# 启动：uv run python main.py
+# cameras[] 是全项目唯一的摄像头清单：id/url/task/标定参数全部在此指定。
+# =====================================================================
+
+cameras:
+  - id: pole_cam_01
+    # RTSP 实时流（现场部署示例）：
+    #   "rtsp://admin:password@192.168.1.64:554/streaming/Channels/101"
+    # 当前为联调测试，使用本地视频文件。
+    url: "1080/capture_20260908_151742.mp4"
+    task: pole                      # pole = 立柱监测（分割模型，1fps 抽帧）
+    # 本摄像头专属标定：内参 K / 畸变 dist / 外参 R,t（OpenCV 约定 Xc = R Xw + t）
+    calibration:
+      K:
+        - [2410.01593, 0.0, 951.17636]
+        - [0.0, 2413.046, 484.50215]
+        - [0.0, 0.0, 1.0]
+      dist: [-0.7744408, 1.191192, 0.008653581, -0.001408523, -1.730219]
+      R:
+        - [1.0, 0.0, 0.0]
+        - [0.0, 1.0, 0.0]
+        - [0.0, 0.0, 1.0]
+      t: [0.0, 0.0, 5.0]
+
+  - id: marker_cam_01
+    # RTSP 实时流（现场部署示例）：
+    #   "rtsp://admin:password@192.168.1.65:554/streaming/Channels/101"
+    # 当前为联调测试，使用本地视频文件。
+    url: "babiao/fast_move_shorter.mp4"
+    task: marker                    # marker = 靶标跟踪（检测模型，逐帧 + 30s FFT）
+    calibration:
+      K:
+        - [2410.01593, 0.0, 951.17636]
+        - [0.0, 2413.046, 484.50215]
+        - [0.0, 0.0, 1.0]
+      dist: [-0.7744408, 1.191192, 0.008653581, -0.001408523, -1.730219]
+      R:
+        - [1.0, 0.0, 0.0]
+        - [0.0, 1.0, 0.0]
+        - [0.0, 0.0, 1.0]
+      t: [0.0, 0.0, 5.0]
+
+# ---------------------------------------------------------------------
+# 模型（每个分支只加载一份，跨摄像头攒批推理）
+# ---------------------------------------------------------------------
+models:
+  pole_seg:
+    # 立柱实例分割模型：优先 OpenVINO 导出目录（含 .xml，dynamic 支持多 batch），回退 .pt 权重
+    openvino_dir: "./models/pole26s_seg_openvino_model"
+    weights: "./models/pole26s_seg.pt"
+    confidence: 0.25
+    class_id: 0
+    device: "cpu"                   # 有 CUDA 可改 "0"；OpenVINO 时用 "cpu" 或 "intel:gpu"
+    tracker: "bytetrack.yaml"
+  marker_det:
+    # 靶标检测模型：优先 OpenVINO 导出目录（含 .xml，dynamic 支持多 batch），回退 .pt 权重
+    openvino_dir: "./models/marker26s_det_openvino_model"
+    weights: "./models/marker26s_det.pt"
+    confidence: 0.25
+    class_id: 0
+    device: "intel:gpu"             # 无核显时可改 "cpu"
+    tracker: "bytetrack.yaml"
+
+# ---------------------------------------------------------------------
+# 立柱监测分支参数（字段沿用原 pole_tilt_monitor/config/config.yaml）
+# ---------------------------------------------------------------------
+pole:
+  # 每秒抽取并处理的帧数（不超过源 FPS）
+  sample_fps: 1.0
+  measurement:
+    # "world_3d" = 用外参 R/t + 地面平面 + 杆长恢复 3D 倾角
+    # "image_relative" = 只用内参 K/dist，图像坐标系相对倾斜变化
+    mode: "image_relative"
+    pole_length_m: 3.0              # 仅 world_3d 使用
+    ground_z_m: 0.0                 # 仅 world_3d 使用
+    endpoint_ratio: 0.10
+    ransac_residual_px: 2.5
+    ransac_iterations: 300
+    body_trim_ratio: 0.10
+    quality_threshold: 0.60
+    min_ray_plane_angle_deg: 5.0    # 仅 world_3d 使用
+    max_centerline_residual_px: 4.0
+    max_endpoint_spread_px: 4.0
+    max_length_error_ratio: 0.03    # 仅 world_3d 使用
+    quality_weights:
+      inlier_ratio: 0.30
+      centerline_residual: 0.25
+      top_stability: 0.12
+      bottom_stability: 0.12
+      ray_ground_angle: 0.10
+      length_constraint: 0.11
+  baseline:
+    enabled: true
+    frames: 60                      # world_3d 模式基准帧数
+    relative_frames: 1              # image_relative 模式基准帧数
+  filter:
+    enabled: true
+    alpha: 0.25                     # EMA 平滑系数
+  alarm:
+    left_right_deg: 2.0
+    front_back_deg: 2.0
+    total_deg: 2.5
+
+# ---------------------------------------------------------------------
+# 靶标跟踪分支参数（字段沿用原 marker_subpixel_tracker/config/config.yaml）
+# ---------------------------------------------------------------------
+marker:
+  fft:
+    # 每 window_s 秒一个窗口做一次主频提取（固定不重叠分段）
+    window_s: 30.0
+    snr: 5.0                        # 主频接受的最小信噪比
+    min_samples: 32                 # 窗口内最少样本数，不足不出结果
+  calibration:
+    real_diameter_mm: 100.0         # 靶标外圈圆真实直径
+    frames: 8                       # 自动标定采集帧数上限
+    min_frames: 1                   # 达到即可提前完成标定
+  localization:
+    structure_sigma: 1.5
+    min_lambda_min: 5000.0
+    subpixel_window: 5
+    win_ratio: 0.25
+    win_max: 20
+    min_spacing: 5
+    max_jump_px: 3.0
+  tracking:
+    tracker: "bytetrack.yaml"
+    persist: true
+
+# ---------------------------------------------------------------------
+# 运行参数
+# ---------------------------------------------------------------------
+runtime:
+  output_dir: "output"
+  log_level: "INFO"
+  display: false                    # 多进程下默认 headless；结构化输出走 latest.json
+
+  capture:
+    mode: threads                   # threads | processes（解码 CPU 吃紧时切换）
+    reconnect_s: 5                  # RTSP 断线重连间隔（秒）
+    rtsp_low_latency: true          # TCP + nobuffer 低延迟拉流
+
+  batch:
+    pole:
+      timeout_ms: 500               # 整秒攒批：等齐所有 pole 摄像头或超时
+    marker:
+      max_frames: 8                 # 滑动攒批：满 N 帧或超时即前向
+      timeout_ms: 60
+
+  queue:
+    pole_frame: 2                   # pole 帧队列（满时丢旧保新）
+    marker_frame: 16                # marker 帧队列（满时丢旧保序）
+    result: 256                     # 推理结果 → Recorder（阻塞写，不丢）
+    spectrum: 512                   # 位移时序 → SpectrumAnalyzer
+
+  init:
+    # 初始基准持久化：首张成功帧保存图片+初始数据；重启自动加载不再保存。
+    # 换新摄像头或标定变更后，用 --refresh-init 强制重建。
+    persist: true
+    anchor:
+      iou_min: 0.3                  # 锚点匹配接受阈值（IoU）—— 仅 pole 立柱用
+      release_after_s: 10.0         # 轨迹丢失多久后释放（pole 锚点 / marker raw id 绑定共用）
+      ema_alpha: 0.05               # 锚点框 EMA 跟随系数 —— 仅 pole 立柱用

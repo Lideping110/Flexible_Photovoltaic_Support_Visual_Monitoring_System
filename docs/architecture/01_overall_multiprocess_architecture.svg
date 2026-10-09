@@ -1,0 +1,79 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 680 700" width="680" height="700" role="img">
+<title>柔性光伏支架可视化监测系统总体多进程架构（批推理模式）</title>
+<desc>Supervisor 主进程管理两条分支：每分支一个拉流进程（内部每摄像头一个读流线程）加一个推理进程，模型只加载一次，跨摄像头攒批推理；共享 SpectrumAnalyzer 与 Recorder 进程，输出结构化 JSONL 文件；进程总数恒为 7，与摄像头数量无关。</desc>
+<defs>
+<marker id="arrow" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+<path d="M2 1L8 5L2 9" fill="none" stroke="context-stroke" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+</marker>
+</defs>
+<rect x="0" y="0" width="680" height="700" fill="#2B2B28"/>
+<rect x="200" y="28" width="280" height="56" rx="10" fill="#3C3489" stroke="#AFA9EC" stroke-width="0.5"/>
+<text x="340" y="48" text-anchor="middle" dominant-baseline="central" font-size="14" font-weight="500" fill="#CECBF6" font-family="sans-serif">Supervisor 主进程</text>
+<text x="340" y="68" text-anchor="middle" dominant-baseline="central" font-size="11" fill="#AFA9EC" font-family="sans-serif">配置加载校验 · spawn 进程树 · 健康监控 · 优雅退出</text>
+<path d="M340 84 V104 M180 104 H500 M180 104 V124 M500 104 V124" fill="none" stroke="#5F5E5A" stroke-width="1" stroke-dasharray="4 3"/>
+<path d="M180 124 V126" fill="none" stroke="#5F5E5A" stroke-width="1" marker-end="url(#arrow)"/>
+<path d="M500 124 V126" fill="none" stroke="#5F5E5A" stroke-width="1" marker-end="url(#arrow)"/>
+<rect x="30" y="130" width="300" height="370" rx="14" fill="#04342C" stroke="#1D9E75" stroke-width="0.5"/>
+<text x="44" y="152" dominant-baseline="central" font-size="13" font-weight="500" fill="#9FE1CB" font-family="sans-serif">立柱监测分支 · 分割模型仅加载 1 次</text>
+<rect x="46" y="166" width="268" height="100" rx="8" fill="#085041" stroke="#5DCAA5" stroke-width="0.5"/>
+<text x="180" y="186" text-anchor="middle" dominant-baseline="central" font-size="13" font-weight="500" fill="#9FE1CB" font-family="sans-serif">PoleCapture 进程 ×1</text>
+<text x="180" y="206" text-anchor="middle" dominant-baseline="central" font-size="11" fill="#5DCAA5" font-family="sans-serif">每摄像头一个读流线程 · 1fps grab+retrieve</text>
+<text x="180" y="222" text-anchor="middle" dominant-baseline="central" font-size="11" fill="#5DCAA5" font-family="sans-serif">去畸变（本机 K/dist）· 断线重连</text>
+<rect x="58" y="234" width="76" height="20" rx="5" fill="#04342C" stroke="#1D9E75" stroke-width="0.5"/>
+<text x="96" y="244" text-anchor="middle" dominant-baseline="central" font-size="11" fill="#9FE1CB" font-family="sans-serif">cam01 线程</text>
+<rect x="142" y="234" width="76" height="20" rx="5" fill="#04342C" stroke="#1D9E75" stroke-width="0.5"/>
+<text x="180" y="244" text-anchor="middle" dominant-baseline="central" font-size="11" fill="#9FE1CB" font-family="sans-serif">cam02 线程</text>
+<rect x="226" y="234" width="76" height="20" rx="5" fill="#04342C" stroke="#1D9E75" stroke-width="0.5"/>
+<text x="264" y="244" text-anchor="middle" dominant-baseline="central" font-size="11" fill="#9FE1CB" font-family="sans-serif">camN 线程</text>
+<path d="M180 266 V294" fill="none" stroke="#888780" stroke-width="1.5" marker-end="url(#arrow)"/>
+<text x="190" y="278" dominant-baseline="central" font-size="11" fill="#888780" font-family="sans-serif">帧队列 q=2</text>
+<text x="190" y="292" dominant-baseline="central" font-size="11" fill="#888780" font-family="sans-serif">带 cam_id·frame_id·ts</text>
+<rect x="46" y="298" width="268" height="118" rx="8" fill="#085041" stroke="#5DCAA5" stroke-width="0.5"/>
+<text x="180" y="318" text-anchor="middle" dominant-baseline="central" font-size="13" font-weight="500" fill="#9FE1CB" font-family="sans-serif">PoleInference 进程 ×1</text>
+<text x="180" y="338" text-anchor="middle" dominant-baseline="central" font-size="11" fill="#5DCAA5" font-family="sans-serif">pole26s_seg(OpenVINO) 仅加载一次（省 N−1 份内存）</text>
+<text x="180" y="354" text-anchor="middle" dominant-baseline="central" font-size="11" fill="#5DCAA5" font-family="sans-serif">整秒攒批：等齐 N 路或 500ms 超时</text>
+<text x="180" y="370" text-anchor="middle" dominant-baseline="central" font-size="11" fill="#5DCAA5" font-family="sans-serif">批量前向 → 按 cam_id 拆分</text>
+<text x="180" y="386" text-anchor="middle" dominant-baseline="central" font-size="11" fill="#5DCAA5" font-family="sans-serif">PoleCameraSession：ByteTrack + RANSAC + EMA</text>
+<text x="180" y="448" text-anchor="middle" dominant-baseline="central" font-size="11" fill="#5DCAA5" font-family="sans-serif">会话类逐杆状态（基准·EMA·报警）按 (cam_id, pole_id) 隔离</text>
+<rect x="350" y="130" width="300" height="370" rx="14" fill="#412402" stroke="#BA7517" stroke-width="0.5"/>
+<text x="364" y="152" dominant-baseline="central" font-size="13" font-weight="500" fill="#FAC775" font-family="sans-serif">靶标跟踪分支 · 检测模型仅加载 1 次</text>
+<rect x="366" y="166" width="268" height="100" rx="8" fill="#633806" stroke="#EF9F27" stroke-width="0.5"/>
+<text x="500" y="186" text-anchor="middle" dominant-baseline="central" font-size="13" font-weight="500" fill="#FAC775" font-family="sans-serif">MarkerCapture 进程 ×1</text>
+<text x="500" y="206" text-anchor="middle" dominant-baseline="central" font-size="11" fill="#EF9F27" font-family="sans-serif">每摄像头一个读流线程 · 逐帧解码</text>
+<text x="500" y="222" text-anchor="middle" dominant-baseline="central" font-size="11" fill="#EF9F27" font-family="sans-serif">可选去畸变 · 断线重连</text>
+<rect x="378" y="234" width="76" height="20" rx="5" fill="#412402" stroke="#BA7517" stroke-width="0.5"/>
+<text x="416" y="244" text-anchor="middle" dominant-baseline="central" font-size="11" fill="#FAC775" font-family="sans-serif">cam01 线程</text>
+<rect x="462" y="234" width="76" height="20" rx="5" fill="#412402" stroke="#BA7517" stroke-width="0.5"/>
+<text x="500" y="244" text-anchor="middle" dominant-baseline="central" font-size="11" fill="#FAC775" font-family="sans-serif">cam02 线程</text>
+<rect x="546" y="234" width="76" height="20" rx="5" fill="#412402" stroke="#BA7517" stroke-width="0.5"/>
+<text x="584" y="244" text-anchor="middle" dominant-baseline="central" font-size="11" fill="#FAC775" font-family="sans-serif">camN 线程</text>
+<path d="M500 266 V294" fill="none" stroke="#888780" stroke-width="1.5" marker-end="url(#arrow)"/>
+<text x="510" y="278" dominant-baseline="central" font-size="11" fill="#888780" font-family="sans-serif">帧队列 q=16</text>
+<text x="510" y="292" dominant-baseline="central" font-size="11" fill="#888780" font-family="sans-serif">按摄像头丢旧保序</text>
+<rect x="366" y="298" width="268" height="118" rx="8" fill="#633806" stroke="#EF9F27" stroke-width="0.5"/>
+<text x="500" y="318" text-anchor="middle" dominant-baseline="central" font-size="13" font-weight="500" fill="#FAC775" font-family="sans-serif">MarkerInference 进程 ×1</text>
+<text x="500" y="338" text-anchor="middle" dominant-baseline="central" font-size="11" fill="#EF9F27" font-family="sans-serif">marker26s(OpenVINO) 仅加载一次</text>
+<text x="500" y="354" text-anchor="middle" dominant-baseline="central" font-size="11" fill="#EF9F27" font-family="sans-serif">滑动攒批：满 8 帧或 60ms 超时 · 跨摄像头混批</text>
+<text x="500" y="370" text-anchor="middle" dominant-baseline="central" font-size="11" fill="#EF9F27" font-family="sans-serif">批量前向 → 按 cam_id 拆分</text>
+<text x="500" y="386" text-anchor="middle" dominant-baseline="central" font-size="11" fill="#EF9F27" font-family="sans-serif">MarkerCameraSession：ByteTrack+TargetLock+λmin</text>
+<path d="M500 416 V440" fill="none" stroke="#888780" stroke-width="1.5" marker-end="url(#arrow)"/>
+<rect x="366" y="442" width="268" height="48" rx="8" fill="#412402" stroke="#BA7517" stroke-width="0.5"/>
+<text x="500" y="460" text-anchor="middle" dominant-baseline="central" font-size="13" font-weight="500" fill="#FAC775" font-family="sans-serif">SpectrumAnalyzer 进程 ×1</text>
+<text x="500" y="478" text-anchor="middle" dominant-baseline="central" font-size="11" fill="#EF9F27" font-family="sans-serif">每 (cam_id, track_id) 30s 窗口 FFT 主频</text>
+<path d="M180 500 V526" fill="none" stroke="#888780" stroke-width="1.5" marker-end="url(#arrow)"/>
+<text x="170" y="515" text-anchor="end" dominant-baseline="central" font-size="11" fill="#888780" font-family="sans-serif">倾角时序</text>
+<path d="M500 500 V526" fill="none" stroke="#888780" stroke-width="1.5" marker-end="url(#arrow)"/>
+<text x="510" y="515" dominant-baseline="central" font-size="11" fill="#888780" font-family="sans-serif">位移+主频</text>
+<rect x="200" y="530" width="280" height="56" rx="10" fill="#0C447C" stroke="#85B7EB" stroke-width="0.5"/>
+<text x="340" y="550" text-anchor="middle" dominant-baseline="central" font-size="14" font-weight="500" fill="#B5D4F4" font-family="sans-serif">Recorder 进程 ×1</text>
+<text x="340" y="568" text-anchor="middle" dominant-baseline="central" font-size="11" fill="#85B7EB" font-family="sans-serif">单一写入者 · JSONL 追加 + latest.json 快照</text>
+<path d="M270 586 V606 H180 V624" fill="none" stroke="#888780" stroke-width="1.5" marker-end="url(#arrow)"/>
+<path d="M410 586 V606 H500 V624" fill="none" stroke="#888780" stroke-width="1.5" marker-end="url(#arrow)"/>
+<rect x="30" y="628" width="300" height="52" rx="8" fill="#444441" stroke="#888780" stroke-width="0.5"/>
+<text x="180" y="646" text-anchor="middle" dominant-baseline="central" font-size="13" font-weight="500" fill="#D3D1C7" font-family="sans-serif">output/pole/{cam_id}/</text>
+<text x="180" y="664" text-anchor="middle" dominant-baseline="central" font-size="11" fill="#B4B2A9" font-family="sans-serif">measurements.jsonl · latest.json</text>
+<rect x="350" y="628" width="300" height="52" rx="8" fill="#444441" stroke="#888780" stroke-width="0.5"/>
+<text x="500" y="646" text-anchor="middle" dominant-baseline="central" font-size="13" font-weight="500" fill="#D3D1C7" font-family="sans-serif">output/marker/{cam_id}/</text>
+<text x="500" y="664" text-anchor="middle" dominant-baseline="central" font-size="11" fill="#B4B2A9" font-family="sans-serif">displacement.jsonl · spectrum.jsonl</text>
+<text x="340" y="694" text-anchor="middle" dominant-baseline="central" font-size="11" fill="#888780" font-family="sans-serif">进程总数恒为 7，与摄像头数量无关；两个模型各仅加载一份</text>
+</svg>

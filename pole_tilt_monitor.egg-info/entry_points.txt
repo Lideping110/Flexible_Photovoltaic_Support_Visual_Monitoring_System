@@ -1,3 +1,0 @@
-[console_scripts]
-marker_subpixel_tracker = marker_subpixel_tracker.src.realtime:main
-pole_tilt_monitor = pole_tilt_monitor.src.main:main
