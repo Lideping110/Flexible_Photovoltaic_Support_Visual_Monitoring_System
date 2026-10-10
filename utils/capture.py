@@ -14,7 +14,7 @@ import cv2
 import numpy as np
 
 from .common import (SENTINEL, is_realtime_source, log, open_camera,
-                     put_blocking, put_latest)
+                     put_backpressure, put_blocking, put_latest)
 
 
 def _undistorter(calibration: dict):
@@ -33,7 +33,7 @@ def _undistorter(calibration: dict):
 
 
 def _camera_loop(cam, out_q, result_q, stop_event, branch, sample_fps,
-                 undistort, reconnect_s):
+                 undistort, reconnect_s, block_on_full=False):
     """单个摄像头的读流线程。out_q=帧队列；result_q=结果队列（事件）。"""
     from .common import now_ts
 
@@ -95,10 +95,15 @@ def _camera_loop(cam, out_q, result_q, stop_event, branch, sample_fps,
             fail_count = 0
 
             ts = (time.perf_counter() - started) if realtime else source_t
-            put_latest(out_q, {
-                "cam_id": cam_id, "frame_id": frame_id, "ts": ts,
-                "frame": und(frame),
-            })
+            msg = {"cam_id": cam_id, "frame_id": frame_id, "ts": ts,
+                   "frame": und(frame)}
+            if block_on_full:
+                # 文件源：背压阻塞写，队列满则等待消费方腾位，绝不丢帧，
+                # 保证逐帧分析（marker 亚像素跟踪）的连续性。
+                put_backpressure(out_q, msg, stop_event)
+            else:
+                # 实时源：丢旧保新，限制端到端延迟（丢帧可接受）。
+                put_latest(out_q, msg)
             if sample_period is not None:
                 next_sample_t += sample_period
             frame_id += 1
@@ -111,10 +116,24 @@ def _camera_loop(cam, out_q, result_q, stop_event, branch, sample_fps,
 
 
 def run_capture(branch: str, cameras: list, frame_queues: dict, result_q,
-                stop_event, runtime_cfg: dict, pole_cfg: dict = None):
-    """拉流进程入口（每分支一个）。frame_queues: {cam_id: Queue}。"""
+                stop_event, runtime_cfg: dict, pole_cfg: dict = None,
+                ready_event=None):
+    """拉流进程入口（每分支一个）。frame_queues: {cam_id: Queue}。
+
+    ready_event: 推理进程预热完成后置位；capture 在其置位前不开始抽帧，
+    避免消费方冷启动期间帧被有界队列（丢旧保新）冲掉。
+    """
     tag = f"capture-{branch}"
     log(tag, f"启动，摄像头: {[c['id'] for c in cameras]}")
+
+    if ready_event is not None:
+        log(tag, "等待推理进程预热（模型编译）就绪…")
+        while not ready_event.is_set() and not stop_event.is_set():
+            stop_event.wait(0.5)
+        if stop_event.is_set():
+            log(tag, "收到停止信号，放弃启动")
+            return
+        log(tag, "推理就绪，开始抽帧")
 
     reconnect_s = float(runtime_cfg.get("reconnect_s", 5.0))
     sample_fps = None
@@ -128,10 +147,12 @@ def run_capture(branch: str, cameras: list, frame_queues: dict, result_q,
     threads = []
     for cam in cameras:
         q = frame_queues[cam["id"]]
+        # 文件源（非实时）背压不丢帧；实时源丢旧保新以限制延迟
+        block_on_full = not is_realtime_source(cam["url"])
         t = threading.Thread(
             target=_camera_loop,
             args=(cam, q, result_q, stop_event, branch, sample_fps,
-                  undistort, reconnect_s),
+                  undistort, reconnect_s, block_on_full),
             daemon=True,
         )
         t.start()

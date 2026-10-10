@@ -8,6 +8,7 @@
 """
 import json
 import os
+import time
 from datetime import datetime
 from pathlib import Path
 
@@ -26,7 +27,19 @@ def atomic_write_json(path, obj: dict) -> None:
     tmp = path.with_suffix(path.suffix + ".tmp")
     with tmp.open("w", encoding="utf-8") as f:
         json.dump(obj, f, ensure_ascii=False, indent=2)
-    os.replace(tmp, path)
+    # Windows 上 os.replace 可能被杀毒/索引服务对新建文件的瞬时锁打断
+    #（实测多进程流水线中偶发 WinError 5，单进程压测 300 次零失败）。
+    # 原子替换遇 PermissionError 短退避重试是 Windows 下的标准做法。
+    delay = 0.02
+    for attempt in range(6):
+        try:
+            os.replace(tmp, path)
+            return
+        except PermissionError:
+            if attempt == 5:
+                raise
+            time.sleep(delay)
+            delay *= 2
 
 
 def load_json(path):
@@ -41,17 +54,48 @@ def load_json(path):
 
 
 def save_anchor_frame(frame, anchor_boxes: dict, frame_path) -> None:
-    """把锚点框标注到首帧并保存为 init_frame.jpg（pole / marker 共用）。"""
+    """把锚点标注到首帧并保存为 init_frame.jpg（pole / marker 共用）。
+
+    pole 分支：若锚点已建立基线，则复刻基线参考图风格绘制（调色板中线 +
+    绿顶/红底端点圆 + `Pole Px angle=.. Q=..` 标签），与 viz 基线图、实时
+    监测画面一致；基线未就绪时退化为仅画框 + pid 文字。
+    """
     import cv2
 
     vis = frame.copy()
-    for pid, a in anchor_boxes.items():
-        x1, y1, x2, y2 = (int(round(v)) for v in a["box"])
-        cv2.rectangle(vis, (x1, y1), (x2, y2), (0, 255, 255), 2)
-        cv2.putText(vis, pid, (x1, max(18, y1 - 8)),
-                    cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 0, 0), 4)
-        cv2.putText(vis, pid, (x1, max(18, y1 - 8)),
-                    cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 255, 255), 2)
+    palette = [(255, 255, 0), (255, 0, 255), (0, 255, 255),
+               (255, 128, 0), (128, 255, 0), (0, 128, 255)]
+    for i, (pid, a) in enumerate(anchor_boxes.items()):
+        box = a.get("box")
+        # 注意：marker 分支传入的 box 是 numpy 数组，不能用 `if not box` 判空
+        #（多元素数组真值歧义会抛 ValueError），必须显式判 None + 长度。
+        if box is None or len(box) < 4:
+            continue
+        x1, y1, x2, y2 = (int(round(v)) for v in box)
+        cv2.rectangle(vis, (x1, y1), (x2, y2), (255, 255, 255), 2)
+
+        bl = a.get("baseline")
+        values = bl.get("values") if isinstance(bl, dict) else bl
+        if values and len(values) >= 5:
+            top = (int(round(values[0])), int(round(values[1])))
+            bottom = (int(round(values[2])), int(round(values[3])))
+            angle = float(values[4])
+            color = palette[i % len(palette)]
+            cv2.line(vis, bottom, top, color, 3)
+            cv2.circle(vis, top, 7, (0, 255, 0), -1)
+            cv2.circle(vis, bottom, 7, (0, 0, 255), -1)
+            q = a.get("quality")
+            label = f"Pole {pid}  angle={angle:+.4f} deg  Q={q:.2f}"
+            label_at = (max(5, top[0] - 35), max(70, top[1] - 12))
+            cv2.putText(vis, label, label_at, cv2.FONT_HERSHEY_SIMPLEX,
+                        0.55, (0, 0, 0), 4)
+            cv2.putText(vis, label, label_at, cv2.FONT_HERSHEY_SIMPLEX,
+                        0.55, color, 2)
+        else:
+            cv2.putText(vis, pid, (x1, max(18, y1 - 8)),
+                        cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 0, 0), 4)
+            cv2.putText(vis, pid, (x1, max(18, y1 - 8)),
+                        cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 255, 255), 2)
     cv2.imwrite(str(frame_path), vis)
 
 

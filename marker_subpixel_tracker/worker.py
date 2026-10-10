@@ -51,7 +51,8 @@ class MarkerCameraSession:
         # 靶标身份靠 ByteTrack 持续跟踪维持（box 仅存档，不做框匹配）
         self.registry = MarkerTrackRegistry(
             self.cam_id, prefix="M",
-            release_after_s=anchor_cfg["release_after_s"])
+            release_after_s=anchor_cfg["release_after_s"],
+            relock_max_px=anchor_cfg.get("relock_max_px", 200.0))
         self.multi = MultiTargetTracker(max_age=30)
         # pid -> {"tried", "diams", "mm_per_px", "ready", "ref"}
         self.calib = {}
@@ -111,7 +112,8 @@ class MarkerCameraSession:
 
 
 def run_marker_inference(cfg: dict, cameras: list, frame_queues: dict, result_q,
-                         spectrum_q, stop_event, refresh_init: bool = False):
+                         spectrum_q, stop_event, refresh_init: bool = False,
+                         ready_event=None):
     """靶标分支推理进程入口。"""
     from .features import measure_outer_diameter_px
     from .pipeline import localize_one
@@ -138,6 +140,13 @@ def run_marker_inference(cfg: dict, cameras: list, frame_queues: dict, result_q,
         model_cfg.get("class_id", 0), model_cfg.get("device", "intel:gpu"),
         model_cfg.get("tracker", "bytetrack.yaml"), tag,
     )
+
+    # 预热模型：把首帧冷启动移出采集关键路径，完成后置位就绪事件，
+    # 通知 capture 开始抽帧（避免早期帧被有界队列冲掉）。
+    engine.warmup()
+    if ready_event is not None:
+        ready_event.set()
+        log(tag, "预热完成，已通知 capture 开始抽帧")
 
     sessions = {
         cam["id"]: MarkerCameraSession(

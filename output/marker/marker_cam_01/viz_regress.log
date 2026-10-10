@@ -1,0 +1,9 @@
+配置文件: D:\Flexible_Photovoltaic_Support_Visual_Monitoring_System\config.yaml
+输出目录: D:\Flexible_Photovoltaic_Support_Visual_Monitoring_System\output\viz
+pole 测量模式: image_relative (image_relative → 渲染前对每帧去畸变)
+----------------------------------------------------------------
+[marker] marker_cam_01  ✅ 标注视频: D:\Flexible_Photovoltaic_Support_Visual_Monitoring_System\output\viz\marker_cam_01_annotated.mp4
+        源帧数=297  已标注帧=297  覆盖帧号 0..296  去畸变=False  fps=25.0  基准杆数=2
+        QA 帧: 4 张 → D:\Flexible_Photovoltaic_Support_Visual_Monitoring_System\output\viz\frames\marker_cam_01
+----------------------------------------------------------------
+完成。用播放器打开 <output_dir>/viz/<cam_id>_annotated.mp4 查看。

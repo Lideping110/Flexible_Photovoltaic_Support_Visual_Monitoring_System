@@ -48,6 +48,20 @@ class BatchInferenceBase:
                 self._batch_ok = False
         return [self.model.predict(source=f, **kwargs)[0] for f in frames]
 
+    def warmup(self, h: int = 640, w: int = 640) -> None:
+        """预热：触发 OpenVINO/后端编译，把首帧冷启动延迟移出采集关键路径。
+
+        推理进程应在进入主循环前调用一次，并随后 set「就绪」事件，
+        避免 capture 在开始抽帧时因消费方未就绪而丢失帧。
+        """
+        import numpy as np
+
+        dummy = np.zeros((h, w, 3), dtype=np.uint8)
+        try:
+            self.model.predict(source=[dummy], **self._predict_kwargs())
+        except Exception as exc:  # noqa: BLE001
+            log(self.tag, f"warmup 失败（可忽略，首帧推理会重试）: {exc}")
+
 
 class SegInference(BatchInferenceBase):
     """分割模型（pole 分支）：predict 额外加 retina_masks。"""

@@ -9,7 +9,7 @@ cameras:
     # RTSP 实时流（现场部署示例）：
     #   "rtsp://admin:password@192.168.1.64:554/streaming/Channels/101"
     # 当前为联调测试，使用本地视频文件。
-    url: "1080/capture_20260908_151742.mp4"
+    url: "1080/1080.mp4"
     task: pole                      # pole = 立柱监测（分割模型，1fps 抽帧）
     # 本摄像头专属标定：内参 K / 畸变 dist / 外参 R,t（OpenCV 约定 Xc = R Xw + t）
     calibration:
@@ -30,17 +30,9 @@ cameras:
     # 当前为联调测试，使用本地视频文件。
     url: "babiao/fast_move_shorter.mp4"
     task: marker                    # marker = 靶标跟踪（检测模型，逐帧 + 30s FFT）
-    calibration:
-      K:
-        - [2410.01593, 0.0, 951.17636]
-        - [0.0, 2413.046, 484.50215]
-        - [0.0, 0.0, 1.0]
-      dist: [-0.7744408, 1.191192, 0.008653581, -0.001408523, -1.730219]
-      R:
-        - [1.0, 0.0, 0.0]
-        - [0.0, 1.0, 0.0]
-        - [0.0, 0.0, 1.0]
-      t: [0.0, 0.0, 5.0]
+    # 注意：marker 在原始（未畸变）像素空间做亚像素定位，mm/px 由靶标外圈圆
+    # 直径自标定（见 marker.calibration），不需要相机内参/外参（K/dist/R/t），
+    # 也不做去畸变——请勿在此挂 calibration 块，否则只会误导、不被加载。
 
 # ---------------------------------------------------------------------
 # 模型（每个分支只加载一份，跨摄像头攒批推理）
@@ -52,7 +44,7 @@ models:
     weights: "./models/pole26s_seg.pt"
     confidence: 0.25
     class_id: 0
-    device: "cpu"                   # 有 CUDA 可改 "0"；OpenVINO 时用 "cpu" 或 "intel:gpu"
+    device: "intel:gpu"                   # 有 CUDA 可改 "0"；OpenVINO 时用 "cpu" 或 "intel:gpu"
     tracker: "bytetrack.yaml"
   marker_det:
     # 靶标检测模型：优先 OpenVINO 导出目录（含 .xml，dynamic 支持多 batch），回退 .pt 权重
@@ -149,8 +141,14 @@ runtime:
       timeout_ms: 60
 
   queue:
-    pole_frame: 2                   # pole 帧队列（满时丢旧保新）
-    marker_frame: 16                # marker 帧队列（满时丢旧保序）
+    # 帧队列深度同时约束两种投递策略：
+    #   - 文件源（非实时）：capture 改用 put_backpressure 背压阻塞写，队列满则
+    #     等待消费方腾位，绝不丢帧——marker 逐帧亚像素跟踪必须连续，丢帧即断裂；
+    #   - 实时源（RTSP）：沿用 put_latest 丢旧保新，限制端到端延迟（丢帧可接受）。
+    # 因此 marker_frame / pole_frame 此处仅作为"背压缓冲深度"或"实时丢旧缓冲"，
+    # 文件源下不会因队列有界而丢失中段帧。
+    pole_frame: 64                  # pole 帧队列（文件源背压不丢；实时源缓冲抽样流）
+    marker_frame: 16                # marker 帧队列深度（文件源=背压缓冲, 实时源=丢旧保新）
     result: 256                     # 推理结果 → Recorder（阻塞写，不丢）
     spectrum: 512                   # 位移时序 → SpectrumAnalyzer
 
@@ -162,3 +160,4 @@ runtime:
       iou_min: 0.3                  # 锚点匹配接受阈值（IoU）—— 仅 pole 立柱用
       release_after_s: 10.0         # 轨迹丢失多久后释放（pole 锚点 / marker raw id 绑定共用）
       ema_alpha: 0.05               # 锚点框 EMA 跟随系数 —— 仅 pole 立柱用
+      relock_max_px: 200.0         # marker 重锁门限：未认领新检测框中心距某失主 last_box 超过此值(px)不抢身份；仅 marker 用，避免 N≥4 多目标张冠李戴

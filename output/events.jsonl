@@ -10,3 +10,40 @@
 {"branch": "marker", "kind": "event", "cam_id": "marker_cam_01", "event": "camera_eof", "ts": 1791538731.0193934, "detail": "babiao/fast_move_shorter.mp4"}
 {"branch": "pole", "kind": "event", "cam_id": "pole_cam_01", "event": "init_loaded", "ts": 1791538732.7394552, "detail": "锚点 4 个，注入基准 4 条"}
 {"branch": "marker", "kind": "event", "cam_id": "marker_cam_01", "event": "init_loaded", "ts": 1791538734.474062, "detail": "锚点 2 个"}
+{"branch": "pole", "kind": "event", "cam_id": "pole_cam_01", "event": "camera_connected", "ts": 1791592095.377786, "detail": ""}
+{"branch": "pole", "kind": "event", "cam_id": "pole_cam_01", "event": "camera_eof", "ts": 1791592096.2836826, "detail": "1080/capture_20260908_151742.mp4"}
+{"branch": "marker", "kind": "event", "cam_id": "marker_cam_01", "event": "camera_connected", "ts": 1791592096.4873712, "detail": ""}
+{"branch": "marker", "kind": "event", "cam_id": "marker_cam_01", "event": "camera_eof", "ts": 1791592101.902689, "detail": "babiao/fast_move_shorter.mp4"}
+{"branch": "pole", "kind": "event", "cam_id": "pole_cam_01", "event": "init_created", "ts": 1791592105.3620625, "detail": "首帧锚点 4 个"}
+{"branch": "marker", "kind": "event", "cam_id": "marker_cam_01", "event": "init_created", "ts": 1791592107.319679, "detail": "首帧锁定靶标 1 个"}
+{"branch": "marker", "kind": "event", "cam_id": "marker_cam_01", "event": "camera_connected", "ts": 1791592395.3257334, "detail": ""}
+{"branch": "pole", "kind": "event", "cam_id": "pole_cam_01", "event": "camera_connected", "ts": 1791592395.9091964, "detail": ""}
+{"branch": "pole", "kind": "event", "cam_id": "pole_cam_01", "event": "camera_eof", "ts": 1791592396.8327258, "detail": "1080/capture_20260908_151742.mp4"}
+{"branch": "pole", "kind": "event", "cam_id": "pole_cam_01", "event": "init_created", "ts": 1791592398.3940313, "detail": "首帧锚点 4 个"}
+{"branch": "marker", "kind": "event", "cam_id": "marker_cam_01", "event": "init_created", "ts": 1791592398.6938987, "detail": "首帧锁定靶标 2 个"}
+{"branch": "marker", "kind": "event", "cam_id": "marker_cam_01", "event": "camera_eof", "ts": 1791592399.7560146, "detail": "babiao/fast_move_shorter.mp4"}
+{"branch": "pole", "kind": "event", "cam_id": "pole_cam_01", "event": "camera_connected", "ts": 1791592603.3615828, "detail": ""}
+{"branch": "pole", "kind": "event", "cam_id": "pole_cam_01", "event": "camera_eof", "ts": 1791592604.0989015, "detail": "1080/1080.mp4"}
+{"branch": "marker", "kind": "event", "cam_id": "marker_cam_01", "event": "camera_connected", "ts": 1791592604.2562594, "detail": ""}
+{"branch": "pole", "kind": "event", "cam_id": "pole_cam_01", "event": "init_created", "ts": 1791592608.0356202, "detail": "首帧锚点 4 个"}
+{"branch": "marker", "kind": "event", "cam_id": "marker_cam_01", "event": "camera_eof", "ts": 1791592610.4096282, "detail": "babiao/fast_move_shorter.mp4"}
+{"branch": "marker", "kind": "event", "cam_id": "marker_cam_01", "event": "init_created", "ts": 1791592610.748648, "detail": "首帧锁定靶标 2 个"}
+{"branch": "marker", "kind": "event", "cam_id": "marker_cam_01", "event": "camera_connected", "ts": 1791597711.3138697, "detail": ""}
+{"branch": "marker", "kind": "event", "cam_id": "marker_cam_01", "event": "init_loaded", "ts": 1791597714.8195324, "detail": "锚点 2 个"}
+{"branch": "marker", "kind": "event", "cam_id": "marker_cam_01", "event": "camera_eof", "ts": 1791597716.4444785, "detail": "babiao/fast_move_shorter.mp4"}
+{"branch": "marker", "kind": "event", "cam_id": "marker_cam_01", "event": "camera_connected", "ts": 1791598357.541035, "detail": ""}
+{"branch": "marker", "kind": "event", "cam_id": "marker_cam_01", "event": "init_loaded", "ts": 1791598361.316424, "detail": "锚点 2 个"}
+{"branch": "marker", "kind": "event", "cam_id": "marker_cam_01", "event": "camera_eof", "ts": 1791598367.3149757, "detail": "babiao/fast_move_shorter.mp4"}
+{"branch": "marker", "kind": "event", "cam_id": "marker_cam_01", "event": "camera_connected", "ts": 1791599217.3019345, "detail": ""}
+{"branch": "marker", "kind": "event", "cam_id": "marker_cam_01", "event": "init_loaded", "ts": 1791599220.7274725, "detail": "锚点 2 个"}
+{"branch": "marker", "kind": "event", "cam_id": "marker_cam_01", "event": "camera_eof", "ts": 1791599225.883039, "detail": "babiao/fast_move_shorter.mp4"}
+{"branch": "marker", "kind": "event", "cam_id": "marker_cam_01", "event": "camera_connected", "ts": 1791602075.0413373, "detail": ""}
+{"branch": "marker", "kind": "event", "cam_id": "marker_cam_01", "event": "init_created", "ts": 1791602079.1409202, "detail": "首帧锁定靶标 2 个"}
+{"branch": "marker", "kind": "event", "cam_id": "marker_cam_01", "event": "camera_connected", "ts": 1791602194.604472, "detail": ""}
+{"branch": "marker", "kind": "event", "cam_id": "marker_cam_01", "event": "init_created", "ts": 1791602198.5026205, "detail": "首帧锁定靶标 2 个"}
+{"branch": "marker", "kind": "event", "cam_id": "marker_cam_01", "event": "camera_connected", "ts": 1791602398.4738953, "detail": ""}
+{"branch": "marker", "kind": "event", "cam_id": "marker_cam_01", "event": "init_created", "ts": 1791602402.1770654, "detail": "首帧锁定靶标 2 个"}
+{"branch": "marker", "kind": "event", "cam_id": "marker_cam_01", "event": "camera_eof", "ts": 1791602407.7866027, "detail": "babiao/fast_move_shorter.mp4"}
+{"branch": "marker", "kind": "event", "cam_id": "marker_cam_01", "event": "camera_connected", "ts": 1791613347.659439, "detail": ""}
+{"branch": "marker", "kind": "event", "cam_id": "marker_cam_01", "event": "init_created", "ts": 1791613351.0890021, "detail": "首帧锁定靶标 2 个"}
+{"branch": "marker", "kind": "event", "cam_id": "marker_cam_01", "event": "camera_eof", "ts": 1791613356.8496773, "detail": "babiao/fast_move_shorter.mp4"}

@@ -63,7 +63,33 @@ output/
     ├── spectrum.jsonl                            # 每 30s 主频记录
     ├── latest.json
     └── init/...
+└── viz/                                          # 方案A离线标注视频（viz_overlay.py 产物）
+    ├── {cam_id}_annotated.mp4                    # 结果回贴原始视频
+    ├── {cam_id}_baseline_frame_N.jpg             # pole 基线参考图（对齐 pole_tilt_monitor）
+    └── frames/{cam_id}/frame_XXXXXX.jpg          # 标注帧 jpg（视觉 QA）
 ```
+
+## 结果可视化（方案 A：回贴原始视频）
+
+```bash
+uv run python viz_overlay.py                  # 全部摄像头
+uv run python viz_overlay.py --cam marker_cam_01 --dump-frames 6
+```
+
+- 原理：按 `frame_id`（源视频 0 基真帧序）顺序遍历原始视频逐帧对位叠加，规避 H.264 seek 漂移；
+- **坐标系对齐**：marker 分支不去畸变 → 直接叠加；pole 分支 `image_relative` 模式
+  在 capture 阶段已 `cv2.undistort` → 渲染前对每帧做同参数去畸变，保证
+  `box/top/bottom` 严丝合缝；
+- **渲染对齐**：pole 分支复刻 `D:\摄像头拉流 pole_tilt_monitor` 的实时渲染风格
+  （`vision.draw_measurement`）：白框、绿顶/红底端点圆、青色中心线、白字
+  `ID..Q..OK LR..FB..T..deg`、INVALID 橙字、ALARM 红字、顶部 HUD
+  `Frame N  Baseline poles: M`；离线回放与实时监测画面像素级一致，可直接对比；
+- **基线参考图**：pole 分支额外产出 `{cam_id}_baseline_frame_N.jpg`——回读首有效帧、
+  去畸变后绘制各杆中位基线（对齐 `save_relative_baseline_images`）；
+- 叠加内容：立柱框 + 端点圆 + 中心线 + 倾角标签；靶标框 + 亚像素中心十字
+  + 累计位移(mm) + mm/px；
+- 只消费 `output/` + 源视频，不 import 推理栈（无模型文件也能跑）；RTSP 实时源
+  不支持离线回放，请先录制成文件。
 
 ## 取流地址（现场部署参考）
 

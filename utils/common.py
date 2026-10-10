@@ -74,6 +74,32 @@ def put_latest(q, item) -> None:
             pass
 
 
+def put_backpressure(q, item, stop_event, timeout: float = 0.5) -> bool:
+    """文件源背压：队列满则阻塞等待空间，绝不丢帧（直至 stop_event 置位）。
+
+    用于离线视频逐帧分析（marker/pole 文件源）。逐帧解码的 marker 必须
+    保证每一帧都进入推理，否则有界队列'丢旧保新'会把中段帧挤掉，破坏
+    subpixel 连续性与累计位移序列。实时源（RTSP）不应调用本函数，
+    改用 put_latest 以丢弃旧帧、限制延迟。
+    """
+    from queue import Full
+
+    while not stop_event.is_set():
+        try:
+            q.put(item, timeout=timeout)
+            return True
+        except Full:
+            continue
+        except Exception:
+            return False
+    # 已收到停止信号：最后一搏，超时则放弃该帧
+    try:
+        q.put(item, timeout=0.5)
+        return True
+    except Exception:
+        return False
+
+
 def put_blocking(q, item, timeout: float = 5.0) -> bool:
     """结果队列：结果不可丢，阻塞写；超时返回 False（仅日志告警）。"""
     try:

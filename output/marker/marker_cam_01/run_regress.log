@@ -1,0 +1,20 @@
+[recorder] 启动，输出目录 D:\Flexible_Photovoltaic_Support_Visual_Monitoring_System\output
+[capture-marker] 启动，摄像头: ['marker_cam_01']
+[capture-marker] 等待推理进程预热（模型编译）就绪…
+[supervisor] 已启动 4 个进程: ['recorder', 'marker_capture', 'marker_inference', 'spectrum']
+[spectrum] 启动，窗口 30.0s, SNR>=5.0, 最少 32 样本
+[marker-inf] 模型: D:\Flexible_Photovoltaic_Support_Visual_Monitoring_System\models\marker26s_det_openvino_model
+Loading D:\Flexible_Photovoltaic_Support_Visual_Monitoring_System\models\marker26s_det_openvino_model for OpenVINO inference...
+Using OpenVINO LATENCY mode for batch=1 inference on GPU.0...
+[marker-inf] 预热完成，已通知 capture 开始抽帧
+[marker-inf] 启动，摄像头: ['marker_cam_01']
+[capture-marker] 推理就绪，开始抽帧
+[marker-inf] marker_cam_01 M2 mm/px=0.725058
+[marker-inf] marker_cam_01 M1 mm/px=0.866251
+[capture-marker_cam_01] 视频结束: babiao/fast_move_shorter.mp4
+[capture-marker] 退出
+[marker-inf] marker_cam_01 下线（剩余 []）
+[marker-inf] 退出
+[spectrum] 退出
+[recorder] 退出
+[supervisor] 正常收尾完成

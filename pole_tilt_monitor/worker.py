@@ -154,7 +154,8 @@ class PoleCameraSession:
 
 
 def run_pole_inference(cfg: dict, cameras: list, frame_queues: dict, result_q,
-                       stop_event, refresh_init: bool = False):
+                       stop_event, refresh_init: bool = False,
+                       ready_event=None):
     """立柱分支推理进程入口。"""
     tag = "pole-inf"
     model_cfg = cfg["models"]["pole_seg"]
@@ -172,6 +173,13 @@ def run_pole_inference(cfg: dict, cameras: list, frame_queues: dict, result_q,
         model_cfg.get("class_id", 0), model_cfg.get("device", "cpu"),
         model_cfg.get("tracker", "bytetrack.yaml"), tag,
     )
+
+    # 预热模型：把首帧冷启动（OpenVINO 编译/JIT）移出采集关键路径，
+    # 完成后置位就绪事件，capture 才会开始抽帧，避免早期帧被有界队列冲掉。
+    engine.warmup()
+    if ready_event is not None:
+        ready_event.set()
+        log(tag, "预热完成，已通知 capture 开始抽帧")
 
     sessions = {
         cam["id"]: PoleCameraSession(

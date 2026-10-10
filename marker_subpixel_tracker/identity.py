@@ -10,6 +10,7 @@
 
 初始框 box 仍持久化存储（存档 / init_frame 标注），但不参与身份匹配。
 """
+import lap
 import numpy as np
 
 
@@ -25,10 +26,14 @@ class MarkerTrackRegistry:
                      "last_seen": ts, "baseline": Any, "quality": float|None}
     """
 
-    def __init__(self, cam_id, prefix="M", release_after_s=10.0):
+    def __init__(self, cam_id, prefix="M", release_after_s=10.0,
+                 relock_max_px=200.0):
         self.cam_id = cam_id
         self.prefix = prefix
         self.release_after_s = float(release_after_s)
+        # 重锁门限：未认领新检测框中心距某失主 last_box 超过此值(px)则不抢身份，
+        # 视为外来/新目标跳过——挡掉 N≥4 多目标张冠李戴与跨屏乱绑。
+        self.relock_max_px = float(relock_max_px)
         self.targets: dict = {}
         self.initialized = False
         self.loaded_from_disk = False
@@ -93,21 +98,54 @@ class MarkerTrackRegistry:
                     and ts - t["last_seen"] > self.release_after_s):
                 t["raw_id"] = None
 
-        # 3) 新 raw id → 空置 pid：最近位置重锁（last_box，非初始框）
-        free_pids = [pid for pid, t in self.targets.items() if t["raw_id"] is None]
+        # 3) 新 raw id → 空置/失主 pid：匈牙利最优指派 + 距离门限重锁
+        #    失主 = 绑定的 raw id 本帧不在场（ByteTrack 丢失后换了新 id）。
+        #    候选 = 空置 pid 或失主 pid（同池）；未认领 det = 还没拿到 pid 的 raw id。
+        #    用全距离矩阵 + Hungarian（lap.lapjv，与 ByteTrack 同款求解器）求全局
+        #    最优 1-1 配对，而非逐 det 贪心取最近——否则 N≥4 多目标同帧重现时，
+        #    局部最近会累积成“张冠李戴”（贪心把每个新框绑到邻居）。
+        #    门限实现（满方阵，自管虚拟行/列，不依赖 lap 的 extend_cost/cost_limit 黑箱）：
+        #      方阵 N = n_det + n_cand；行=真实 det + n_cand 个虚拟 det；
+        #      列=真实候选 + n_det 个虚拟候选。真实 det→真实候选=距离(超门限设 INF)；
+        #      每个真实 det 留一列虚拟候选(代价=门限+1)；虚拟 det 只认虚拟候选(代价0)。
+        #      → 合法近距配对(≤门限) 代价 < 虚拟候选，正常认领；外来/超距目标所有边
+        #        为 INF，只能落虚拟候选(门限+1) → 视为未配对，worker 侧 pid is None 跳过，
+        #        且绝不抢占真主人的 pid。
+        candidates = [pid for pid, t in self.targets.items()
+                      if t["raw_id"] is None or t["raw_id"] not in present_ids]
         rest = [d for d in dets if d["id"] not in mapping]
-        for det in rest:
-            if not free_pids:
-                break
-            dc = _center(det["box"])
-            best_pid = min(free_pids, key=lambda pid: float(
-                np.linalg.norm(dc - _center(self.targets[pid]["last_box"]))))
-            mapping[det["id"]] = best_pid
-            self.targets[best_pid]["raw_id"] = int(det["id"])
-            self.targets[best_pid]["last_seen"] = float(ts)
-            self.targets[best_pid]["last_box"] = np.asarray(
-                det["box"], dtype=np.float64)
-            free_pids.remove(best_pid)
+        if candidates and rest:
+            det_centers = [_center(d["box"]) for d in rest]
+            cand_centers = [_center(self.targets[pid]["last_box"]) for pid in candidates]
+            limit = float(self.relock_max_px)
+            INF = 1e6
+            n_det = len(det_centers)
+            n_cand = len(cand_centers)
+            N = n_det + n_cand                       # 方阵
+            cost = np.full((N, N), INF, dtype=np.float32)
+            for i in range(n_det):
+                for j in range(n_cand):
+                    d = float(np.linalg.norm(det_centers[i] - cand_centers[j]))
+                    cost[i, j] = d if d <= limit else INF
+                cost[i, n_cand + i] = limit + 1.0    # 真实 det i 的虚拟候选列
+            for r in range(n_det, N):                # 虚拟 det 行只认虚拟候选(0)
+                for k in range(n_cand, N):
+                    cost[r, k] = 0.0
+            _, colsol, _ = lap.lapjv(cost)           # 满方阵纯最优指派
+            colsol = np.atleast_1d(colsol)           # 方阵时 lap 可能返回标量，统一成数组
+            # colsol[j] = 候选列 j 分到的 det 行；遍历候选（列），反查 det。
+            for j, pid in enumerate(candidates):
+                di = int(colsol[j])
+                if di < 0 or di >= n_det:            # 分到虚拟 det（外来/超距）→ 不分配
+                    continue
+                if cost[di, j] >= INF:
+                    continue
+                det = rest[di]
+                mapping[det["id"]] = pid
+                self.targets[pid]["raw_id"] = int(det["id"])
+                self.targets[pid]["last_seen"] = float(ts)
+                self.targets[pid]["last_box"] = np.asarray(
+                    det["box"], dtype=np.float64)
 
         return mapping
 

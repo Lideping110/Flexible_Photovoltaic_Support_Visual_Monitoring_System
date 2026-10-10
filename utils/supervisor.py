@@ -63,26 +63,30 @@ def run(config_path: str, refresh_init: bool = False) -> int:
     if pole_cams:
         from pole_tilt_monitor.worker import run_pole_inference
 
+        # 推理就绪事件：capture 在消费方预热完成前不投递帧，避免冷启动丢帧
+        pole_ready = mp.Event()
         procs["pole_capture"] = _spawn(
             "pole_capture", run_capture,
             ("pole", pole_cams, pole_queues, result_q, stop_event,
-             runtime["capture"], cfg.get("pole", {})))
+             runtime["capture"], cfg.get("pole", {}), pole_ready))
         procs["pole_inference"] = _spawn(
             "pole_inference", run_pole_inference,
-            (cfg, pole_cams, pole_queues, result_q, stop_event, refresh_init))
+            (cfg, pole_cams, pole_queues, result_q, stop_event,
+             refresh_init, pole_ready))
 
     if marker_cams:
         from marker_subpixel_tracker.worker import run_marker_inference
         from marker_subpixel_tracker.spectrum import run_spectrum_analyzer
 
+        marker_ready = mp.Event()
         procs["marker_capture"] = _spawn(
             "marker_capture", run_capture,
             ("marker", marker_cams, marker_queues, result_q, stop_event,
-             runtime["capture"], None))
+             runtime["capture"], None, marker_ready))
         procs["marker_inference"] = _spawn(
             "marker_inference", run_marker_inference,
             (cfg, marker_cams, marker_queues, result_q, spectrum_q,
-             stop_event, refresh_init))
+             stop_event, refresh_init, marker_ready))
         procs["spectrum"] = _spawn(
             "spectrum", run_spectrum_analyzer,
             (float(cfg["marker"]["fft"]["window_s"]),
