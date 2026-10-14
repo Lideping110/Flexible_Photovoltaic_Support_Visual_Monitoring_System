@@ -9,7 +9,8 @@ cameras:
     # RTSP 实时流（现场部署示例）：
     #   "rtsp://admin:password@192.168.1.64:554/streaming/Channels/101"
     # 当前为联调测试，使用本地视频文件。
-    url: "1080/1080.mp4"
+    # url: "1080/1080.mp4"
+    url: "rtsp://admin:hhjt220220@192.168.1.65:554/streaming/Channels/101"
     task: pole                      # pole = 立柱监测（分割模型，1fps 抽帧）
     # 本摄像头专属标定：内参 K / 畸变 dist / 外参 R,t（OpenCV 约定 Xc = R Xw + t）
     calibration:
@@ -25,10 +26,10 @@ cameras:
       t: [0.0, 0.0, 5.0]
 
   - id: marker_cam_01
-    # RTSP 实时流（现场部署示例）：
-    #   "rtsp://admin:password@192.168.1.65:554/streaming/Channels/101"
-    # 当前为联调测试，使用本地视频文件。
-    url: "babiao/fast_move_shorter.mp4"
+    # RTSP 实时流（现场部署真实地址，已实测沙箱可直连）：
+    url: "rtsp://admin:hhjt110110@192.168.1.64:554/streaming/Channels/101"
+    # 联调测试用的本地视频文件（改回此行即可恢复离线回放）：
+    # url: "babiao/fast_move_shorter.mp4"
     task: marker                    # marker = 靶标跟踪（检测模型，逐帧 + 30s FFT）
     # 注意：marker 在原始（未畸变）像素空间做亚像素定位，mm/px 由靶标外圈圆
     # 直径自标定（见 marker.calibration），不需要相机内参/外参（K/dist/R/t），
@@ -104,6 +105,12 @@ marker:
     window_s: 30.0
     snr: 5.0                        # 主频接受的最小信噪比
     min_samples: 32                 # 窗口内最少样本数，不足不出结果
+    min_span_s: 10.0                # 窗口内样本"实际跨度"下限（秒）。看板"频谱图出图"
+                                    # 与"主频取值"共用这一条门限（须与 min_samples 同时满足）：
+                                    # 不足时只显示"首窗数据累积中 X / 需 Y s"，不画曲线——否则
+                                    # 0.3s 的噪声形状会被当成频谱（曾出现"刚开始就有频率曲线"）。
+                                    # 源总长不足 30s 时按 min(min_span_s, window_s) 判，不会永远未满窗。
+                                    # 若要严格按"满 30s 才出图"，把这里改成 30.0。
   calibration:
     real_diameter_mm: 100.0         # 靶标外圈圆真实直径
     frames: 8                       # 自动标定采集帧数上限
@@ -120,13 +127,34 @@ marker:
     tracker: "bytetrack.yaml"
     persist: true
 
+  # 挠度 / 索力：物理模型尚未确定（影响二者的因素还没梳理清楚），因此**先不做任何
+  # 计算**，界面上直接显示下面的占位值——避免继续用"窗口内位移幅值冒充挠度、
+  # 用主频平方比冒充索力"给出看似真实、实则无法解释的数字。
+  # 将来真实模型/真实输出就绪后，把 enabled 置 false 改走真实计算，或直接改数值。
+  placeholder:
+    enabled: true
+    deflection_mm: 0.0          # 挠度占位值（mm）
+    cable_force_idx: 100.0      # 索力占位值（沿用"首帧=100"的相对量纲）
+
+# ---------------------------------------------------------------------
+# 大屏显示（dashboard）参数
+# ---------------------------------------------------------------------
+dashboard:
+  # 实时流显示用的子码流通道：dashboard 后端 cv2 直连 RTSP 子码流（显示用），
+  # 与 main 走的主码流（101）分离，两进程互不抢带宽。海康约定主码流 101 / 子码流 102；
+  # 由相机 URL 末尾的 Channels/N 自动派生为 Channels/102。无 GUI / 服务器部署必开。
+  stream_channel: "102"
+  stream_fps: 15                      # 子码流 MJPEG 编码帧率（仅限制推送频率，抓帧仍按源速率）
+  reconnect_s: 3.0                   # RTSP 断线后重连间隔（秒）
+
 # ---------------------------------------------------------------------
 # 运行参数
 # ---------------------------------------------------------------------
 runtime:
   output_dir: "output"
   log_level: "INFO"
-  display: false                    # 多进程下默认 headless；结构化输出走 latest.json
+  display: false                     # 实时叠加窗口开关：true 时本机弹 CV2 GUI 预览窗（仅本地调试用）；现设 false，
+  # 实时画面统一在 Web 大屏看（MJPEG 流通道，与 GUI 窗无关）。无 GUI / 服务器 / 只走 Web 务必 false。
 
   capture:
     mode: threads                   # threads | processes（解码 CPU 吃紧时切换）

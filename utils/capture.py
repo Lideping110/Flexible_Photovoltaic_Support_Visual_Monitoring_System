@@ -52,6 +52,7 @@ def _camera_loop(cam, out_q, result_q, stop_event, branch, sample_fps,
         cap = open_camera(url)
         if cap is None:
             _event("camera_open_failed", str(url))
+            log(tag, f"{cam_id} 打开摄像头失败（网络/凭证/通道？），{reconnect_s}s 后重连: {url}")
             if not realtime:
                 out_q.put(SENTINEL)  # 视频文件打不开：一次性失败即下线
                 return
@@ -60,6 +61,7 @@ def _camera_loop(cam, out_q, result_q, stop_event, branch, sample_fps,
 
         src_fps = float(cap.get(cv2.CAP_PROP_FPS) or 0.0) or 25.0
         _event("camera_connected")
+        log(tag, f"{cam_id} 摄像头已连接（realtime={realtime}, 源FPS≈{src_fps:.1f}）: {url}")
 
         frame_id = 0
         sample_period = (1.0 / max(1e-6, float(sample_fps))
@@ -74,6 +76,7 @@ def _camera_loop(cam, out_q, result_q, stop_event, branch, sample_fps,
                 fail_count += 1
                 if realtime and fail_count >= 30:
                     _event("camera_degraded", "连续 30 次取流失败")
+                    log(tag, f"{cam_id} 连续 30 次取流失败，断开并重连")
                     break
                 if not realtime:
                     cap.release()
@@ -107,6 +110,8 @@ def _camera_loop(cam, out_q, result_q, stop_event, branch, sample_fps,
             if sample_period is not None:
                 next_sample_t += sample_period
             frame_id += 1
+            if frame_id % 100 == 0:
+                log(tag, f"{cam_id} 已取流 {frame_id} 帧（realtime={realtime}）")
 
         cap.release()
         if realtime and not stop_event.is_set():

@@ -20,6 +20,8 @@ import cv2
 import json
 import numpy as np
 
+from utils.common import draw_subpixel_cross
+
 LINE_AA = cv2.LINE_AA
 FONT = cv2.FONT_HERSHEY_SIMPLEX
 
@@ -112,9 +114,14 @@ def _draw_marker(frame, rec, w, h):
 
     cx, cy = rec.get("cx"), rec.get("cy")
     if cx is not None and cy is not None:
-        px, py = _clip((cx, cy), w, h)
-        cv2.drawMarker(frame, (px, py), (0, 0, 255),  # 红色十字（BGR）
-                       cv2.MARKER_CROSS, 12, 2)
+        # 十字尺寸/线宽统一由 utils.common.draw_subpixel_cross 决定（常量集中一处），
+        # 不再在本文件里另算一份，避免与 persist 的初始帧标注各调各的。
+        draw_subpixel_cross(frame, (cx, cy), box)
+    else:
+        # 亚像素定位失败（localize_one 返回 None）：必须显式标注，
+        # 否则画面上"只有黄框没有十字"会被误读成绘制漏了，实际是没定位到。
+        cv2.putText(frame, "NO FIX", (x1, max(16, y2 + 16)),
+                    cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 165, 255), 2)
 
     pid = rec.get("pid", "?")
     raw = rec.get("raw_track_id")          # ByteTrack 原始跟踪 id（底层会跳变）
@@ -191,6 +198,8 @@ def render_annotated_video(src_path, branch, frame_map, out_path,
     fid = 0
     annotated = 0
     dumped = 0
+    cur_recs = None  # 前向填充：结果不是逐帧的（pole 每秒 1 快照），把最近一次结果
+    # "顶满"后续每一帧，直到下一条结果出现，保证整秒/相邻帧都带标注。
     while True:
         ok, frame = cap.read()
         if not ok:
@@ -198,7 +207,9 @@ def render_annotated_video(src_path, branch, frame_map, out_path,
         if undistort:
             frame = und(frame)
 
-        recs = frame_map.get(fid)
+        if fid in frame_map:
+            cur_recs = frame_map[fid]
+        recs = cur_recs
         n_t = len(recs) if recs else 0
         if recs:
             for r in recs:
@@ -214,7 +225,7 @@ def render_annotated_video(src_path, branch, frame_map, out_path,
 
         vw.write(frame)
 
-        if dump_dir and recs and dumped < dump_max:
+        if dump_dir and (fid in frame_map) and dumped < dump_max:
             dp = dump_dir / f"frame_{fid:06d}.jpg"
             cv2.imwrite(str(dp), frame)
             dump_paths.append(str(dp))

@@ -29,7 +29,8 @@ DEFAULTS = {
     },
     "pole": {"sample_fps": 1.0},
     "marker": {
-        "fft": {"window_s": 30.0, "snr": 5.0, "min_samples": 32},
+        "fft": {"window_s": 30.0, "snr": 5.0, "min_samples": 32,
+                 "min_span_s": 10.0},
         "calibration": {"real_diameter_mm": 100.0, "frames": 8, "min_frames": 1},
     },
 }

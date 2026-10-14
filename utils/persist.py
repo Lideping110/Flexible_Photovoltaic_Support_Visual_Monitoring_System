@@ -12,6 +12,8 @@ import time
 from datetime import datetime
 from pathlib import Path
 
+from .common import draw_subpixel_cross
+
 STATE_VERSION = 1
 
 
@@ -73,6 +75,10 @@ def save_anchor_frame(frame, anchor_boxes: dict, frame_path) -> None:
             continue
         x1, y1, x2, y2 = (int(round(v)) for v in box)
         cv2.rectangle(vis, (x1, y1), (x2, y2), (255, 255, 255), 2)
+
+        # 亚像素跟踪中心点（marker 分支由 worker 通过 center 传入）：与实时画面/
+        # 标注视频共用同一个绘制函数，尺寸线宽集中定义，保证三处视觉严格一致。
+        draw_subpixel_cross(vis, a.get("center"), (x1, y1, x2, y2))
 
         bl = a.get("baseline")
         values = bl.get("values") if isinstance(bl, dict) else bl

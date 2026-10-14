@@ -17,68 +17,26 @@ import argparse
 from pathlib import Path
 
 from viz.config_io import load_viz_config
-from viz.readers import group_by_frame, load_jsonl
-from viz.render import (render_annotated_video, load_init_baselines,
-                        render_baseline_image)
-
-JSONL_KIND = {"pole": "measurements", "marker": "displacement"}
+from viz.export import export_cam_video
+from viz.render import load_init_baselines, render_baseline_image
 
 
 def _run_cam(cam, output_dir, pole_mode, dump_frames):
     branch = cam["task"]
-    kind = JSONL_KIND.get(branch)
-    if kind is None:
-        return {"cam": cam["id"], "status": "skip", "reason": f"未知分支 {branch}"}
-
-    src = Path(cam["url"])
-    if not src.exists():
-        # RTSP 等实时源不做帧级回放（frame_id 对齐需现场抓取），明确跳过
-        if str(cam["url"]).lower().startswith(("rtsp://", "rtmp://", "http://", "https://")):
-            return {"cam": cam["id"], "status": "skip",
-                    "reason": "实时流源不在线下回放模式，请先录制成文件"}
-        return {"cam": cam["id"], "status": "skip", "reason": f"源视频不存在: {src}"}
-
-    jsonl = Path(output_dir) / branch / cam["id"] / f"{kind}.jsonl"
-    if not jsonl.is_file():
-        return {"cam": cam["id"], "status": "skip", "reason": f"无结果文件: {jsonl}"}
-
-    rows = load_jsonl(jsonl)
-    if not rows:
-        return {"cam": cam["id"], "status": "skip", "reason": "结果文件为空"}
-
-    frame_map = group_by_frame(rows)
-    undistort = (branch == "pole" and pole_mode == "image_relative")
-
-    # 已建基准杆数（顶部 HUD 用，对齐摄像头拉流 "Baseline poles: N"）
-    pids = set()
-    for recs in frame_map.values():
-        for r in recs:
-            pid = r.get("pid")
-            if pid is not None:
-                pids.add(pid)
-    baseline_poles = len(pids)
-    baseline_frame_id = min(frame_map) if frame_map else 0
-
     out_dir = Path(output_dir) / "viz"
-    out_dir.mkdir(parents=True, exist_ok=True)
-    out_path = out_dir / f"{cam['id']}_annotated.mp4"
-    dump_dir = out_dir / "frames" / cam["id"] if dump_frames > 0 else None
-
-    stats = render_annotated_video(
-        src, branch, frame_map, out_path,
-        calibration=cam.get("calibration"), undistort=undistort,
-        dump_dir=dump_dir, dump_max=dump_frames,
-        baseline_poles=baseline_poles)
-    stats["cam"] = cam["id"]
-    stats["status"] = "ok"
+    stats = export_cam_video(cam, output_dir, pole_mode, out_dir,
+                             dump_frames=dump_frames)
+    if stats.get("status") != "ok":
+        return stats
 
     # 统一基线参考图（对齐摄像头拉流 save_relative_baseline_images）
     if branch == "pole" and pole_mode == "image_relative":
         baselines = load_init_baselines(output_dir, cam["id"])
+        baseline_frame_id = stats.get("first_annotated", 0)
         if baselines:
             bl_path = out_dir / f"{cam['id']}_baseline_frame_{baseline_frame_id}.jpg"
             saved = render_baseline_image(
-                src, branch, cam.get("calibration"), baselines,
+                Path(cam["url"]), branch, cam.get("calibration"), baselines,
                 bl_path, frame_id=baseline_frame_id)
             if saved:
                 stats["baseline_image"] = saved
@@ -87,7 +45,7 @@ def _run_cam(cam, output_dir, pole_mode, dump_frames):
             init_path = (Path(output_dir) / "pole" / cam["id"]
                          / "init" / "init_frame.jpg")
             saved_init = render_baseline_image(
-                src, branch, cam.get("calibration"), baselines,
+                Path(cam["url"]), branch, cam.get("calibration"), baselines,
                 init_path, frame_id=baseline_frame_id)
             if saved_init:
                 stats["init_frame_unified"] = saved_init

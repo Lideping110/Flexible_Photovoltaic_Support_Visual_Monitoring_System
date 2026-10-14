@@ -11,8 +11,15 @@ import numpy as np
 from utils.common import SENTINEL, log, put_blocking
 
 
-def _segment_fft(t, y, snr_min):
-    """对一段时序做 FFT，返回 (f1_hz, snr, n) 或 None（SNR 不达标）。"""
+def _segment_spectrum(t, y, snr_min, nb=200):
+    """对一段时序做 FFT，返回完整结果字典或 None（SNR 不达标 / 样本不足）。
+
+    与主链路固定窗分段（SpectrumAnalyzer._finalize）共用同一套功率谱 / SNR 算法，
+    仅额外把功率谱降采样到 nb 个点（freq/power）供前端直接画曲线，无需前端再算一次 FFT。
+
+    返回 {"freq":[...], "power":[...], "f1_hz":float|None, "snr":float, "n":int, "dt":float}
+    f1_hz 为 None 表示 SNR 未达标（被门控拒绝，与主链路口径一致）。
+    """
     t = np.asarray(t, dtype=np.float64)
     y = np.asarray(y, dtype=np.float64)
     n = len(t)
@@ -33,19 +40,47 @@ def _segment_fft(t, y, snr_min):
     peak_power = float(spectrum[k])
     noise = float(np.median(body))
     snr = (peak_power / noise) if noise > 0 else float("inf")
-    if snr < float(snr_min) or freqs[k] <= 0:
+    f1 = float(freqs[k]) if not (snr < float(snr_min) or freqs[k] <= 0) else None
+    # 降采样到 nb 个点供画曲线（保持 0~Nyquist 的频率覆盖）
+    if len(freqs) > nb:
+        idx = np.linspace(0, len(freqs) - 1, nb).astype(int)
+        f_d = freqs[idx]
+        p_d = spectrum[idx]
+    else:
+        f_d = freqs
+        p_d = spectrum
+    return {
+        "freq": [float(x) for x in f_d],
+        "power": [float(x) for x in p_d],
+        "f1_hz": f1,
+        "snr": snr,
+        "n": int(n),
+        "dt": dt,
+    }
+
+
+def _segment_fft(t, y, snr_min):
+    """对一段时序做 FFT，返回 (f1_hz, snr, n) 或 None（SNR 不达标）。
+
+    现委托 _segment_spectrum 实现，保证与「功率谱下发前端」走同一条算法（口径零分叉）。
+    """
+    r = _segment_spectrum(t, y, snr_min)
+    if r is None:
         return None
-    return float(freqs[k]), float(snr), int(n)
+    return r["f1_hz"], r["snr"], r["n"]
 
 
 def run_spectrum_analyzer(window_s: float, snr_min: float, min_samples: int,
-                          in_q, result_q, stop_event):
+                          in_q, result_q, stop_event, min_span_s=None):
     """主频分析进程入口。"""
     tag = "spectrum"
     window = float(window_s)
+    span_need = (min(float(min_span_s), window)
+                 if min_span_s is not None else 0.0)
     # (cam_id, pid) -> {"samples": [(t, dx, dy)], "last_seg": int}
     buffers = {}
-    log(tag, f"启动，窗口 {window}s, SNR>={snr_min}, 最少 {min_samples} 样本")
+    log(tag, f"启动，窗口 {window}s, SNR>={snr_min}, 最少 {min_samples} 样本"
+             f", 最小跨度 {span_need:g}s")
 
     def _finalize(key, seg):
         buf = buffers.get(key)
@@ -60,6 +95,11 @@ def run_spectrum_analyzer(window_s: float, snr_min: float, min_samples: int,
             ts = [s[0] for s in samples]
             ys = [s[idx] for s in samples]
             if len(ts) < min_samples:
+                continue
+            # min_samples 只约束数量；高频或突发重采样可能在很短的时间
+            # 内凑够数量，仍不能形成可靠的低频谱。Dashboard 使用同一门限。
+            if span_need > 0.0 and (len(ts) < 2 or
+                                    (ts[-1] - ts[0]) < span_need - 1e-9):
                 continue
             r = _segment_fft(ts, ys, snr_min)
             if r is None:

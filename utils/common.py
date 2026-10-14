@@ -54,7 +54,8 @@ def is_realtime_source(url) -> bool:
     if isinstance(url, int):
         return True
     text = str(url).strip().lower()
-    return text.startswith(("rtsp://", "rtsps://")) or text.isdigit()
+    return text.startswith(("rtsp://", "rtsps://", "rtmp://",
+                            "http://", "https://")) or text.isdigit()
 
 
 def put_latest(q, item) -> None:
@@ -206,3 +207,46 @@ def select_model_weights(model_cfg: dict, config_dir: Path) -> Path:
 
 def now_ts() -> float:
     return time.time()
+
+
+# ---------------------------------------------------------------------
+# 亚像素跟踪点（红十字）统一绘制
+#
+# 尺寸与线宽**只在这里定义**。此前 viz/render.py 与 utils/persist.py 各抄了一份
+# "随靶标框自适应放大"的参数（size = max(18, min(bw,bh)*0.9)），结果是两个文件
+# 各自维护、改一处漏一处；且该系数把 34px 的靶标框算成 31px 跨度、线宽 3+黑边 5，
+# 比原始的 12px/2 粗大一倍多，画面上十字几乎压满整个框。统一入口后只改下面常量。
+# ---------------------------------------------------------------------
+CROSS_SIZE_PX = 12       # 十字跨度上限（px）。小靶标按框宽比例收缩，避免压住整个框
+# 红色线宽。**不要调到 1**：1px 细线经 JPEG（init_frame.jpg）与 H.264（标注视频）
+# 的色度子采样后会被压掉大半，实测只剩 4x4 像素的红点、十字几乎不可见。
+CROSS_THICKNESS = 2      # 黑色描边自动取本值 + 1（亮/暗背景都看得见）
+CROSS_DOT_RADIUS = 1     # 中心实心点半径，标出亚像素位置（0 = 不画）
+
+
+def draw_subpixel_cross(img, center, box=None):
+    """在 img 上原地画亚像素跟踪中心点：黑描边红十字 + 中心实心点。
+
+    参数:
+        img     待绘制图像（原地修改，同时返回）
+        center  (cx, cy) 亚像素中心；None/短于 2 元则直接返回
+        box     可选 (x1,y1,x2,y2)；给了就让十字随框缩放并留出边距
+    """
+    if center is None or len(center) < 2:
+        return img
+    h, w = img.shape[:2]
+    px = max(0, min(w - 1, int(round(float(center[0])))))
+    py = max(0, min(h - 1, int(round(float(center[1])))))
+    size = int(CROSS_SIZE_PX)
+    if box is not None and len(box) >= 4:
+        bw = abs(int(round(float(box[2]))) - int(round(float(box[0]))))
+        bh = abs(int(round(float(box[3]))) - int(round(float(box[1]))))
+        # 取框短边的一半，且不小于 8px、不超过上限——大靶标也不会画出巨型十字
+        size = int(min(CROSS_SIZE_PX, max(8, min(bw, bh) * 0.5)))
+    cv2.drawMarker(img, (px, py), (0, 0, 0),
+                   cv2.MARKER_CROSS, size, CROSS_THICKNESS + 1)
+    cv2.drawMarker(img, (px, py), (0, 0, 255),
+                   cv2.MARKER_CROSS, size, CROSS_THICKNESS)
+    if CROSS_DOT_RADIUS > 0:
+        cv2.circle(img, (px, py), int(CROSS_DOT_RADIUS), (0, 0, 255), -1)
+    return img

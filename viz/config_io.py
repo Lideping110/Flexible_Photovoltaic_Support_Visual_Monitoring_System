@@ -35,7 +35,13 @@ def load_viz_config(config_path: str) -> dict:
     cameras = []
     for c in cfg.get("cameras", []) or []:
         url = c.get("url", "")
-        src = url if Path(url).is_absolute() else str(base / url)
+        # 带协议头的实时流(rtsp/rtmp/http/https)保持原样，不要拼到项目根目录：
+        # Windows 上 Path("rtsp://...").is_absolute() 为 False，会被当成相对路径
+        # 拼成 "D:/project/rtsp:/..."，既破坏 URL，又让后续无法识别为实时流。
+        if str(url).lower().startswith(("rtsp://", "rtmp://", "http://", "https://")):
+            src = url
+        else:
+            src = url if Path(url).is_absolute() else str(base / url)
         cameras.append({
             "id": c["id"],
             "task": c["task"],

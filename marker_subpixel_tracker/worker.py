@@ -58,9 +58,17 @@ class MarkerCameraSession:
         self.calib = {}
         self.init_done = False
         self.frame_saved = False
+        self.last_frame = None  # 最近一帧，供 finalize_init 重绘首帧图
+        self._init_wait_t0 = None  # 首次成功初始化前的等待计时（未建立则不锁死）
 
     def handle_init(self, dets, ts):
-        """首帧初始化：加载已保存初始状态，或从首帧检测建立锚点。"""
+        """初始化：加载已保存初始状态，或从带检测的帧建立锚点。
+
+        **只有锚点真正建立（或从盘加载成功）后才置 init_done。** 曾无条件
+        init_done=True：首帧恰好没检测到目标（RTSP 刚连上曝光未稳、或镜头里
+        压根没有靶标）→ ensure_init 永不重试 → 该路整轮零数据且**静默无报错**。
+        现改为未建立就持续重试，并每 10s 告警一次，杜绝"无声死亡"。
+        """
         if self.init_done:
             return
         saved = load_json(self.state_path) if self.persist_flag else None
@@ -82,21 +90,51 @@ class MarkerCameraSession:
                 "detail": f"锚点 {len(saved.get('targets', []))} 个",
             })
             log(self.tag, f"{self.cam_id} 加载持久化初始状态")
-        elif dets:
+            self.init_done = True
+            return
+        if dets:
             self.registry.ensure_init(dets, ts)
             put_blocking(self.result_q, {
                 "branch": "marker", "kind": "event", "cam_id": self.cam_id,
                 "event": "init_created", "ts": now_ts(),
                 "detail": f"首帧锁定靶标 {len(self.registry.targets)} 个",
             })
-        self.init_done = True
+            self.init_done = True
+            return
+        # 本帧无检测：不锁死，下一帧继续尝试；定期告警避免静默
+        if self._init_wait_t0 is None:
+            self._init_wait_t0 = time.perf_counter()
+        waited = time.perf_counter() - self._init_wait_t0
+        if waited >= 10.0:
+            log(self.tag, f"{self.cam_id} 尚未检测到靶标（已等待 {waited:.0f}s），"
+                          f"持续重试初始化——请确认该相机画面中确有靶标")
+            self._init_wait_t0 = time.perf_counter()
+
+    def _save_anchors(self):
+        """构造带亚像素中心点的锚点 dict，供 save_anchor_frame 画红色十字跟踪点。
+
+        中心取自标定参考点 calib[pid]["ref"]（即各靶标初始亚像素跟踪点），
+        与 displacement.jsonl 的 cx/cy 同源；标定未就绪时退化为仅画框（无十字）。
+        """
+        out = {}
+        for pid, a in self.registry.anchors.items():
+            item = dict(a)  # 原 {"box": ...}
+            cal = self.calib.get(pid)
+            if cal and cal.get("ready") and cal.get("ref") is not None:
+                item["center"] = [float(v) for v in cal["ref"]]
+            out[pid] = item
+        return out
 
     def persist_init(self, frame):
-        """首帧图片 + 初始状态（含 mm/px 标定）原子落盘（仅首次运行）。"""
+        """首帧图片 + 初始状态（含 mm/px 标定）原子落盘（仅首次运行）。
+        早期快照：首个标定就绪时先存一版帧；最终一致性由 finalize_init 保证。
+        """
         if not self.registry.initialized or self.registry.loaded_from_disk:
             return
-        if not self.frame_saved and frame is not None:
-            save_anchor_frame(frame, self.registry.anchors, self.frame_path)
+        if frame is not None:
+            self.last_frame = frame
+        if not self.frame_saved and self.last_frame is not None:
+            save_anchor_frame(self.last_frame, self._save_anchors(), self.frame_path)
             self.frame_saved = True
         targets = []
         for t in self.registry.to_targets():
@@ -110,6 +148,26 @@ class MarkerCameraSession:
         atomic_write_json(self.state_path, build_init_state(
             self.cam_id, "marker", targets))
 
+    def finalize_init(self):
+        """退出时用最终锚点集重绘 init_frame.jpg 并重写 state，确保两者一致。
+        修复 finally 中 persist_init(None) 因 frame=None 跳过帧重绘、却仍写 state
+        导致的「帧与状态不一致」（如帧停留旧运行的 1 个靶标而 state 已是 2 个）。
+        """
+        if not self.registry.initialized or self.registry.loaded_from_disk:
+            return
+        if self.last_frame is not None:
+            save_anchor_frame(self.last_frame, self._save_anchors(), self.frame_path)
+        targets = []
+        for t in self.registry.to_targets():
+            bl = None
+            cal = self.calib.get(t["pid"])
+            if cal and cal.get("ready"):
+                bl = {"center": ([float(v) for v in cal["ref"]]
+                                if cal["ref"] is not None else None),
+                      "mm_per_px": cal.get("mm_per_px")}
+            targets.append({**t, "baseline": bl})
+        atomic_write_json(self.state_path, build_init_state(
+            self.cam_id, "marker", targets))
 
 def run_marker_inference(cfg: dict, cameras: list, frame_queues: dict, result_q,
                          spectrum_q, stop_event, refresh_init: bool = False,
@@ -158,9 +216,56 @@ def run_marker_inference(cfg: dict, cameras: list, frame_queues: dict, result_q,
     queues = [(c["id"], frame_queues[c["id"]]) for c in cameras]
     log(tag, f"启动，摄像头: {sorted(online)}")
 
+    # 文件源相机处理完成事件（收到该路 SENTINEL 且批次算完才发），供 supervisor
+    # 即时导出标注视频，无需等 main 整体退出；流源永不收到 SENTINEL，故永不发。
+    #
+    # 为何走 result_q 事件而非推理端直接写文件：标注视频读的是 **Recorder 落盘的
+    # jsonl**，"推理算完"≠"Recorder 写完"。把 camera_done 排在该路所有记录之后
+    # （result_q 是 FIFO），由 Recorder 收到时亲自写 .rec_done —— 完成标记由
+    # 最后一环发出，才是确定性事件。绝不靠"jsonl 不增长了"去猜：无目标时段不写
+    # 行，jsonl 会长时间不增长，那个判据会误判成"已完成"。
+    done_pending = set()
+
+    def _flush_done():
+        while done_pending:
+            cid = done_pending.pop()
+            try:
+                put_blocking(result_q, {
+                    "branch": "marker", "kind": "camera_done",
+                    "cam_id": cid, "ts": now_ts()})
+                log(tag, f"{cid} 推理完成，已发 camera_done 事件")
+            except Exception as exc:
+                log(tag, f"{cid} 完成事件发送失败: {exc}")
+
+    # ---- 实时叠加（仅本地 GUI 调试用）----
+    # 复用 viz.render._draw_marker，保证与离线标注视频视觉一致（黄框/红十字/
+    # M1/M2+raw id+d=()mm+mm/px 标签）。GUI 窗口仅在 runtime.display=true 时启用；
+    # 默认 headless（display=false），生产/服务器环境不受影响。无显示器环境用
+    # 一次性 probe 检测，失败则优雅降级关闭窗口，绝不崩溃。
+    # 注意：main 进程不向磁盘/Web 发布任何实时帧——Web 大屏的实时画面由
+    # dashboard 直接拉 RTSP 子码流显示（见 dashboard.py），两进程解耦。
+    _disp_cv2 = None
+    try:
+        from viz.render import _draw_marker
+    except Exception:
+        draw_marker = None
+    else:
+        draw_marker = _draw_marker
+    if bool(runtime.get("display", False)):
+        import cv2 as _disp_cv2
+        try:
+            _disp_cv2.namedWindow("__probe__", _disp_cv2.WINDOW_AUTOSIZE)
+            _disp_cv2.destroyWindow("__probe__")
+            log(tag, "实时叠加窗口已启用")
+        except Exception as exc:  # noqa: BLE001
+            log(tag, f"display=true 但无法创建 GUI 窗口（环境无显示器？），"
+                      f"已自动关闭实时显示: {exc}")
+            _disp_cv2 = None
+
     try:
         while online and not stop_event.is_set():
             # ---- 滑动攒批：满 N 帧或超时 ----
+            _flush_done()  # 上一轮批次已处理完的相机，发完成事件（略延迟 1 轮，无碍）
             batch = {}  # cam_id -> list of frame msgs
             batch_t0 = None
             total = 0
@@ -175,6 +280,7 @@ def run_marker_inference(cfg: dict, cameras: list, frame_queues: dict, result_q,
                     online.discard(cam_id)
                     queues = [(cid, q) for cid, q in queues if cid != cam_id]
                     log(tag, f"{cam_id} 下线（剩余 {sorted(online)}）")
+                    done_pending.add(cam_id)
                     continue
                 if cam_id in online:
                     batch.setdefault(cam_id, []).append(item)
@@ -197,8 +303,13 @@ def run_marker_inference(cfg: dict, cameras: list, frame_queues: dict, result_q,
                 for msg, frame, result in zip(msgs, frames, results):
                     dets = tracker_update(session.tracker, result, frame)
                     session.handle_init(dets, msg["ts"])
+                    # 复制一份帧用于绘制/发布，避免污染首帧存档（persist_init 用原帧）
+                    _disp = frame.copy()
+                    _dh, _dw = frame.shape[:2]
                     mapping = session.registry.assign(dets, msg["ts"])
                     session.multi.prune(msg["frame_id"])
+                    frame_pids = []
+                    frame_records = []
 
                     for det in dets:
                         pid = mapping.get(det["id"])
@@ -262,6 +373,8 @@ def run_marker_inference(cfg: dict, cameras: list, frame_queues: dict, result_q,
                             "branch": "marker", "kind": "displacement",
                             "cam_id": cam_id, "ts": float(msg["ts"]), "data": record,
                         })
+                        frame_pids.append(pid)
+                        frame_records.append(record)
                         if cum_dx is not None:
                             put_latest(spectrum_q, {
                                 "cam_id": cam_id, "pid": pid,
@@ -269,14 +382,41 @@ def run_marker_inference(cfg: dict, cameras: list, frame_queues: dict, result_q,
                                 "dx_mm": cum_dx, "dy_mm": cum_dy,
                             })
 
+                    # 发布本帧实际输出的目标集合；空集合也有意义，Recorder
+                    # 可据此清掉已经离开画面的旧目标。
+                    put_blocking(result_q, {
+                        "branch": "marker", "kind": "frame_snapshot",
+                        "cam_id": cam_id, "ts": float(msg["ts"]),
+                        "data": {"frame_id": int(msg["frame_id"]),
+                                 "pids": sorted(set(frame_pids))},
+                    })
+                    # 实时叠加：把本帧所有 det 的标注画到副本帧上。
+                    # 没有检测时 frame_records 为空，不能引用未定义的 record。
+                    if draw_marker is not None:
+                        for rec in frame_records:
+                            draw_marker(_disp, rec, _dw, _dh)
+
+                    # 实时叠加窗口：一帧所有 det 画完后弹出（窗口名区分摄像头）；
+                    # 无 GUI（display=false）时跳过，实时画面统一在 Web 大屏由
+                    # dashboard 直接拉 RTSP 子码流显示，main 不再发布任何图片。
+                    if _disp_cv2 is not None:
+                        _disp_cv2.imshow(f"marker:{cam_id}", _disp)
+                        _disp_cv2.waitKey(1)
+
                     # 首次运行：标定就绪后持久化初始数据
                     if (session.registry.initialized
                             and not session.registry.loaded_from_disk):
                         session.persist_init(frame)
     finally:
+        _flush_done()  # 兜底：循环因某路下线退出前，发出剩余完成事件
+        if _disp_cv2 is not None:
+            try:
+                _disp_cv2.destroyAllWindows()
+            except Exception:
+                pass
         for session in sessions.values():
             try:
-                session.persist_init(None)
+                session.finalize_init()
             except Exception:
                 pass
         if spectrum_q is not None:

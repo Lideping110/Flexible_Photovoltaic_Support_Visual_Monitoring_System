@@ -89,9 +89,18 @@ class PoleCameraSession:
             ema_alpha=anchor_cfg["ema_alpha"], prefix="P")
         self.init_done = False
         self.frame_saved = False
+        self.last_frame = None  # 最近一帧，供 finalize_init 重绘首帧图
+        self._init_wait_t0 = None  # 首次成功初始化前的等待计时（未建立则不锁死）
 
     def handle_init(self, dets, ts):
-        """首帧初始化：加载已保存初始状态，或从首帧检测建立锚点。"""
+        """初始化：加载已保存初始状态，或从带检测的帧建立锚点。
+
+        **只有锚点真正建立（或从盘加载成功）后才置 init_done。** 曾无条件
+        init_done=True：首帧恰好没检测到目标（RTSP 刚连上曝光未稳、或镜头里
+        压根没有立柱）→ ensure_init 永不重试 → 该路整轮零数据且**静默无报错**
+        （init/ 空、无 measurements.jsonl、大屏只显示空表）。现改为未建立就
+        持续重试，并每 10s 告警一次，杜绝"无声死亡"。
+        """
         if self.init_done:
             return
         saved = load_json(self.state_path) if self.persist_flag else None
@@ -111,7 +120,9 @@ class PoleCameraSession:
             })
             log(self.tag, f"{self.cam_id} 加载持久化初始状态 "
                           f"({len(saved.get('targets', []))} 锚点)")
-        elif dets:
+            self.init_done = True
+            return
+        if dets:
             self.anchors.ensure_init(dets, ts)
             put_blocking(self.result_q, {
                 "branch": "pole", "kind": "event", "cam_id": self.cam_id,
@@ -119,15 +130,48 @@ class PoleCameraSession:
                 "detail": f"首帧锚点 {len(self.anchors.anchors)} 个",
             })
             log(self.tag, f"{self.cam_id} 首帧建立锚点 {len(self.anchors.anchors)} 个")
-        self.init_done = True
+            self.init_done = True
+            return
+        # 本帧无检测：不锁死，下一帧继续尝试；定期告警避免静默
+        if self._init_wait_t0 is None:
+            self._init_wait_t0 = time.perf_counter()
+        waited = time.perf_counter() - self._init_wait_t0
+        if waited >= 10.0:
+            log(self.tag, f"{self.cam_id} 尚未检测到目标（已等待 {waited:.0f}s），"
+                          f"持续重试初始化——请确认该相机画面中确有立柱、"
+                          f"且标定(K/dist)属于该相机")
+            self._init_wait_t0 = time.perf_counter()
 
     def persist_init(self, frame):
-        """首帧图片 + 初始状态原子落盘（仅首次运行）。"""
+        """首帧图片 + 初始状态原子落盘（仅首次运行）。
+
+        早期快照：首个基线就绪时先存一版帧；最终一致性由 finalize_init 保证，
+        避免 init_frame.jpg 停留在早期/部分锚点状态（曾出现只有 1 根柱子的现象）。
+        """
         if not self.anchors.initialized or self.anchors.loaded_from_disk:
             return
-        if not self.frame_saved and frame is not None:
-            save_anchor_frame(frame, self.anchors.anchors, self.frame_path)
+        if frame is not None:
+            self.last_frame = frame
+        if not self.frame_saved and self.last_frame is not None:
+            save_anchor_frame(self.last_frame, self.anchors.anchors, self.frame_path)
             self.frame_saved = True
+        atomic_write_json(self.state_path, build_init_state(
+            self.cam_id, "pole",
+            [{**t, "baseline": self._baseline_payload(t["baseline"])}
+             for t in self.anchors.to_targets()]))
+
+    def finalize_init(self):
+        """退出时用最终锚点集（含全部基线）重绘 init_frame.jpg 并重写 state。
+
+        关键作用：修复「init_frame.jpg 与 init_state.json 不一致」——之前
+        finally 里 `persist_init(None)` 会因 frame=None 跳过帧重绘、却仍写 state，
+        导致 state 已更新为 4 根柱子而帧仍停留在上次运行的 1 根柱子。这里用
+        last_frame 重绘，保证两者始终来自同一次运行、内容一致。
+        """
+        if not self.anchors.initialized or self.anchors.loaded_from_disk:
+            return
+        if self.last_frame is not None:
+            save_anchor_frame(self.last_frame, self.anchors.anchors, self.frame_path)
         atomic_write_json(self.state_path, build_init_state(
             self.cam_id, "pole",
             [{**t, "baseline": self._baseline_payload(t["baseline"])}
@@ -192,9 +236,29 @@ def run_pole_inference(cfg: dict, cameras: list, frame_queues: dict, result_q,
     queues = [(c["id"], frame_queues[c["id"]]) for c in cameras]
     log(tag, f"启动，摄像头: {sorted(online)}")
 
+    # 文件源相机处理完成事件（收到该路 SENTINEL 且批次算完才发），供 supervisor
+    # 即时导出标注视频；流源永不写。
+    # 走 result_q 事件而非推理端直接写文件：标注视频读的是 **Recorder 落盘的
+    # jsonl**，"推理算完"≠"Recorder 写完"。camera_done 排在该路所有记录之后
+    # （result_q FIFO），由 Recorder 收到时亲自写 .rec_done —— 完成标记由
+    # 最后一环发出，才是确定性事件，而非靠"jsonl 不增长"猜（无目标时段不写行会误判）。
+    done_pending = set()
+
+    def _flush_done():
+        while done_pending:
+            cid = done_pending.pop()
+            try:
+                put_blocking(result_q, {
+                    "branch": "pole", "kind": "camera_done",
+                    "cam_id": cid, "ts": now_ts()})
+                log(tag, f"{cid} 推理完成，已发 camera_done 事件")
+            except Exception as exc:
+                log(tag, f"{cid} 完成事件发送失败: {exc}")
+
     try:
         while online and not stop_event.is_set():
             # ---- 攒批：等齐所有在线摄像头或超时 ----
+            _flush_done()  # 上一轮批次已处理完的相机，发完成事件
             pending = {}
             batch_t0 = None
             while len(pending) < len(online):
@@ -208,6 +272,7 @@ def run_pole_inference(cfg: dict, cameras: list, frame_queues: dict, result_q,
                     online.discard(cam_id)
                     queues = [(cid, q) for cid, q in queues if cid != cam_id]
                     log(tag, f"{cam_id} 下线（剩余 {sorted(online)}）")
+                    done_pending.add(cam_id)
                     continue
                 if cam_id in online:
                     pending[cam_id] = item
@@ -235,6 +300,7 @@ def run_pole_inference(cfg: dict, cameras: list, frame_queues: dict, result_q,
 
                 session.handle_init(dets, msg["ts"])
                 mapping = session.anchors.assign(dets, msg["ts"])
+                frame_pids = []
 
                 for det in dets:
                     pid = mapping.get(det["id"])
@@ -277,11 +343,23 @@ def run_pole_inference(cfg: dict, cameras: list, frame_queues: dict, result_q,
                         "branch": "pole", "kind": "measurement",
                         "cam_id": cid, "ts": float(msg["ts"]), "data": record,
                     })
+                    frame_pids.append(pid)
+
+                # 即使本帧没有任何有效测量，也发布当前帧的目标集合。
+                # Recorder 据此删除已经离开画面的旧目标，避免 latest.json 永久
+                # 保留最后一次测量。
+                put_blocking(result_q, {
+                    "branch": "pole", "kind": "frame_snapshot",
+                    "cam_id": cid, "ts": float(msg["ts"]),
+                    "data": {"frame_id": int(msg["frame_id"]),
+                             "pids": sorted(set(frame_pids))},
+                })
     finally:
-        # 首帧图片兜底保存（首帧无检测时 anchors 未初始化的情况）
+        _flush_done()  # 兜底：发出剩余完成事件
+        # 退出前用最终锚点集重绘 init_frame.jpg，确保与 init_state.json 一致
         for session in sessions.values():
             try:
-                session.persist_init(None)
+                session.finalize_init()
             except Exception:
                 pass
         log(tag, "退出")
