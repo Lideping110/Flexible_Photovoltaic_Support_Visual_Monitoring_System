@@ -18,7 +18,7 @@ from pathlib import Path
 import numpy as np
 
 from utils.common import (SENTINEL, get_any, log, now_ts, put_blocking,
-                          put_latest, select_model_weights, to_float)
+                          put_backpressure, select_model_weights, to_float)
 from utils.inference import DetInference, make_byte_tracker, tracker_update
 from utils.persist import (atomic_write_json, build_init_state, init_paths,
                            load_json, save_anchor_frame)
@@ -57,8 +57,9 @@ class MarkerCameraSession:
         # pid -> {"tried", "diams", "mm_per_px", "ready", "ref"}
         self.calib = {}
         self.init_done = False
-        self.frame_saved = False
         self.last_frame = None  # 最近一帧，供 finalize_init 重绘首帧图
+        self.init_bg_frame = None  # 初始帧背景：首帧采一次，之后只在其上叠加已就绪标定的十字
+        self._drawn_key = None  # 上次重绘时的"已就绪标定集合"，变化才重绘（幂等防抖）
         self._init_wait_t0 = None  # 首次成功初始化前的等待计时（未建立则不锁死）
 
     def handle_init(self, dets, ts):
@@ -127,15 +128,26 @@ class MarkerCameraSession:
 
     def persist_init(self, frame):
         """首帧图片 + 初始状态（含 mm/px 标定）原子落盘（仅首次运行）。
-        早期快照：首个标定就绪时先存一版帧；最终一致性由 finalize_init 保证。
+
+        背景固定为首帧（init_bg_frame，只在第一次拿到帧时采集一次），但**每个
+        靶标标定就绪时都重绘 init_frame.jpg**——把当前所有"已就绪标定"的亚像素
+        十字画到同一张首帧背景上。与 pole 分支同一根因同一修法：不再用
+        frame_saved 把帧冻结在首个标定就绪时刻（否则后续靶标只更新 json、
+        帧停留残缺，直到进程退出 finalize_init 才补全）。
         """
         if not self.registry.initialized or self.registry.loaded_from_disk:
             return
         if frame is not None:
             self.last_frame = frame
-        if not self.frame_saved and self.last_frame is not None:
-            save_anchor_frame(self.last_frame, self._save_anchors(), self.frame_path)
-            self.frame_saved = True
+            if self.init_bg_frame is None:
+                self.init_bg_frame = frame.copy()  # 背景只采一次，保持"首帧"语义
+        bg = self.init_bg_frame if self.init_bg_frame is not None else self.last_frame
+        # 仅当"已就绪标定集合"变化时才重绘帧（幂等防抖）：本方法在主循环里
+        # 逐帧被调，不加防抖会退化成逐帧 JPEG 编码+写盘；新靶标标定就绪必重绘。
+        key = tuple(sorted(pid for pid, c in self.calib.items() if c.get("ready")))
+        if bg is not None and key != self._drawn_key:
+            save_anchor_frame(bg, self._save_anchors(), self.frame_path)
+            self._drawn_key = key
         targets = []
         for t in self.registry.to_targets():
             bl = None
@@ -150,13 +162,15 @@ class MarkerCameraSession:
 
     def finalize_init(self):
         """退出时用最终锚点集重绘 init_frame.jpg 并重写 state，确保两者一致。
-        修复 finally 中 persist_init(None) 因 frame=None 跳过帧重绘、却仍写 state
-        导致的「帧与状态不一致」（如帧停留旧运行的 1 个靶标而 state 已是 2 个）。
+
+        与 persist_init 共用同一首帧背景（init_bg_frame）；运行期内已随标定
+        逐步重绘过，这里做最后一次一致性收尾（帧与 json 始终同源一致）。
         """
         if not self.registry.initialized or self.registry.loaded_from_disk:
             return
-        if self.last_frame is not None:
-            save_anchor_frame(self.last_frame, self._save_anchors(), self.frame_path)
+        bg = self.init_bg_frame if self.init_bg_frame is not None else self.last_frame
+        if bg is not None:
+            save_anchor_frame(bg, self._save_anchors(), self.frame_path)
         targets = []
         for t in self.registry.to_targets():
             bl = None
@@ -230,9 +244,20 @@ def run_marker_inference(cfg: dict, cameras: list, frame_queues: dict, result_q,
         while done_pending:
             cid = done_pending.pop()
             try:
-                put_blocking(result_q, {
-                    "branch": "marker", "kind": "camera_done",
-                    "cam_id": cid, "ts": now_ts()})
+                # 通知 Recorder：该路推理消息已全部发出；同时通知频谱进程
+                # 结算该文件尾段。Recorder 要等两路完成信号都到齐后再写
+                # .rec_done，避免频谱结果尚未落盘就提前关闭该相机文件。
+                if spectrum_q is not None:
+                    put_blocking(result_q, {
+                        "branch": "marker", "kind": "camera_inference_done",
+                        "cam_id": cid, "ts": now_ts()})
+                    put_blocking(spectrum_q, {
+                        "branch": "marker", "kind": "camera_done",
+                        "cam_id": cid, "ts": now_ts()})
+                else:
+                    put_blocking(result_q, {
+                        "branch": "marker", "kind": "camera_done",
+                        "cam_id": cid, "ts": now_ts()})
                 log(tag, f"{cid} 推理完成，已发 camera_done 事件")
             except Exception as exc:
                 log(tag, f"{cid} 完成事件发送失败: {exc}")
@@ -376,11 +401,12 @@ def run_marker_inference(cfg: dict, cameras: list, frame_queues: dict, result_q,
                         frame_pids.append(pid)
                         frame_records.append(record)
                         if cum_dx is not None:
-                            put_latest(spectrum_q, {
+                            # 同一队列承载 EOF 控制消息，不能通过丢旧策略将其冲掉。
+                            put_backpressure(spectrum_q, {
                                 "cam_id": cam_id, "pid": pid,
                                 "t": float(msg["ts"]),
                                 "dx_mm": cum_dx, "dy_mm": cum_dy,
-                            })
+                            }, stop_event)
 
                     # 发布本帧实际输出的目标集合；空集合也有意义，Recorder
                     # 可据此清掉已经离开画面的旧目标。

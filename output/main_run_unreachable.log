@@ -1,0 +1,82 @@
+[supervisor] refresh-init 清除旧结果: D:\Flexible_Photovoltaic_Support_Visual_Monitoring_System\output\pole\pole_cam_01\latest.json
+[supervisor] refresh-init 清除旧结果: D:\Flexible_Photovoltaic_Support_Visual_Monitoring_System\output\pole\pole_cam_01\measurements.jsonl
+[supervisor] refresh-init 清除旧结果: D:\Flexible_Photovoltaic_Support_Visual_Monitoring_System\output\pole\pole_cam_01\pole_cam_01_annotated.mp4
+[supervisor] refresh-init 清除旧结果: D:\Flexible_Photovoltaic_Support_Visual_Monitoring_System\output\pole\pole_cam_01\.rec_done
+[supervisor] refresh-init 清除旧结果: D:\Flexible_Photovoltaic_Support_Visual_Monitoring_System\output\pole\pole_cam_01\init\init_state.json
+[supervisor] refresh-init 清除旧结果: D:\Flexible_Photovoltaic_Support_Visual_Monitoring_System\output\pole\pole_cam_01\init\init_frame.jpg
+[supervisor] refresh-init 清除旧结果: D:\Flexible_Photovoltaic_Support_Visual_Monitoring_System\output\pole\pole_cam_02\latest.json
+[supervisor] refresh-init 清除旧结果: D:\Flexible_Photovoltaic_Support_Visual_Monitoring_System\output\marker\marker_cam_01\latest.json
+[supervisor] refresh-init 清除旧结果: D:\Flexible_Photovoltaic_Support_Visual_Monitoring_System\output\marker\marker_cam_01\displacement.jsonl
+[supervisor] refresh-init 清除旧结果: D:\Flexible_Photovoltaic_Support_Visual_Monitoring_System\output\marker\marker_cam_01\spectrum.jsonl
+[supervisor] refresh-init 清除旧结果: D:\Flexible_Photovoltaic_Support_Visual_Monitoring_System\output\marker\marker_cam_01\marker_cam_01_annotated.mp4
+[supervisor] refresh-init 清除旧结果: D:\Flexible_Photovoltaic_Support_Visual_Monitoring_System\output\marker\marker_cam_01\.rec_done
+[supervisor] refresh-init 清除旧结果: D:\Flexible_Photovoltaic_Support_Visual_Monitoring_System\output\marker\marker_cam_01\init\init_state.json
+[supervisor] refresh-init 清除旧结果: D:\Flexible_Photovoltaic_Support_Visual_Monitoring_System\output\marker\marker_cam_01\init\init_frame.jpg
+[supervisor] refresh-init 清除旧结果: D:\Flexible_Photovoltaic_Support_Visual_Monitoring_System\output\marker\marker_cam_02\latest.json
+[supervisor] refresh-init 清除旧结果: D:\Flexible_Photovoltaic_Support_Visual_Monitoring_System\output\marker\marker_cam_02\displacement.jsonl
+[supervisor] refresh-init 清除旧结果: D:\Flexible_Photovoltaic_Support_Visual_Monitoring_System\output\marker\marker_cam_02\spectrum.jsonl
+[supervisor] refresh-init 清除旧结果: D:\Flexible_Photovoltaic_Support_Visual_Monitoring_System\output\marker\marker_cam_02\init\init_state.json
+[supervisor] refresh-init 清除旧结果: D:\Flexible_Photovoltaic_Support_Visual_Monitoring_System\output\marker\marker_cam_02\init\init_frame.jpg
+[main] Web 大屏已启动 → http://127.0.0.1:8000
+[dashboard] 挠度/索力：占位值（挠度=0.0mm，索力=100.0）
+[recorder] 启动，输出目录 D:\Flexible_Photovoltaic_Support_Visual_Monitoring_System\output
+[dashboard] 相机 pole_cam_02 走原始 URL(未识别子码道，已回退): rtsp://admin:pass@192.0.2.1:554/streaming/Channels/101
+[dashboard] 相机 marker_cam_02 走原始 URL(未识别子码道，已回退): rtsp://admin:pass@192.0.2.2:554/streaming/Channels/101
+[dashboard] 已为 2 路 RTSP 相机启动子码流拉流（显示用）
+[dashboard] 输出目录: D:\Flexible_Photovoltaic_Support_Visual_Monitoring_System\output
+[dashboard] 立柱摄像头: pole_cam_01 | 测振摄像头: marker_cam_01
+[dashboard] 大屏已启动 → http://127.0.0.1:8000  (Ctrl+C 退出)
+[capture-pole] 启动，摄像头: ['pole_cam_01', 'pole_cam_02']
+[capture-pole] 等待推理进程预热（模型编译）就绪…
+[pole-inf] 模型: D:\Flexible_Photovoltaic_Support_Visual_Monitoring_System\models\pole26s_seg_openvino_model
+[capture-marker] 启动，摄像头: ['marker_cam_01', 'marker_cam_02']
+[capture-marker] 等待推理进程预热（模型编译）就绪…
+[supervisor] 已启动 6 个进程: ['recorder', 'pole_capture', 'pole_inference', 'marker_capture', 'marker_inference', 'spectrum']
+[spectrum] 启动，窗口 30.0s, SNR>=5.0, 最少 32 样本, 最小跨度 10s
+Loading D:\Flexible_Photovoltaic_Support_Visual_Monitoring_System\models\pole26s_seg_openvino_model for OpenVINO inference...
+Using OpenVINO LATENCY mode for batch=1 inference on GPU.0...
+[marker-inf] 模型: D:\Flexible_Photovoltaic_Support_Visual_Monitoring_System\models\marker26s_det_openvino_model
+Loading D:\Flexible_Photovoltaic_Support_Visual_Monitoring_System\models\marker26s_det_openvino_model for OpenVINO inference...
+Using OpenVINO LATENCY mode for batch=1 inference on GPU.0...
+[pole-inf] 预热完成，已通知 capture 开始抽帧
+[pole-inf] 启动，摄像头: ['pole_cam_01', 'pole_cam_02']
+[capture-pole] 推理就绪，开始抽帧
+[capture-pole] 抽帧 1.0 fps, 去畸变=True
+[capture-pole_cam_01] pole_cam_01 摄像头已连接（realtime=False, 源FPS≈20.0）: 1080/1080.mp4
+[marker-inf] 预热完成，已通知 capture 开始抽帧
+[capture-marker] 推理就绪，开始抽帧
+[capture-marker_cam_01] marker_cam_01 摄像头已连接（realtime=False, 源FPS≈25.0）: babiao/fast_move_shorter.mp4
+[marker-inf] 启动，摄像头: ['marker_cam_01', 'marker_cam_02']
+[capture-pole_cam_01] 视频结束: 1080/1080.mp4
+[pole-inf] pole_cam_01 首帧建立锚点 4 个
+[recorder] [pole/pole_cam_01] 重置 measurements.jsonl（本次运行结果，覆盖上次遗留）
+[marker-inf] marker_cam_01 M2 mm/px=0.725058
+[recorder] [marker/marker_cam_01] 重置 displacement.jsonl（本次运行结果，覆盖上次遗留）
+[marker-inf] marker_cam_01 M1 mm/px=0.866251
+[capture-marker_cam_01] marker_cam_01 已取流 100 帧（realtime=False）
+[capture-marker_cam_01] marker_cam_01 已取流 200 帧（realtime=False）
+[pole-inf] pole_cam_01 下线（剩余 ['pole_cam_02']）
+[ WARN:0@30.065] global cap_ffmpeg_impl.hpp:453 _opencv_ffmpeg_interrupt_callback Stream timeout triggered after 30056.881000 ms
+[pole-inf] pole_cam_01 推理完成，已发 camera_done 事件
+[recorder] [pole/pole_cam_01] 已写 .rec_done（该路结果全部落盘）
+[capture-marker_cam_01] 视频结束: babiao/fast_move_shorter.mp4
+[marker-inf] marker_cam_01 下线（剩余 ['marker_cam_02']）
+[ WARN:0@30.133] global cap_ffmpeg_impl.hpp:453 _opencv_ffmpeg_interrupt_callback Stream timeout triggered after 30033.855000 ms
+[capture-pole_cam_02] pole_cam_02 打开摄像头失败（网络/凭证/通道？），5.0s 后重连: rtsp://admin:pass@192.0.2.1:554/streaming/Channels/101
+[ WARN:0@30.130] global cap_ffmpeg_impl.hpp:453 _opencv_ffmpeg_interrupt_callback Stream timeout triggered after 30026.370000 ms
+[capture-marker_cam_02] marker_cam_02 打开摄像头失败（网络/凭证/通道？），5.0s 后重连: rtsp://admin:pass@192.0.2.2:554/streaming/Channels/101
+[marker-inf] marker_cam_01 推理完成，已发 camera_done 事件
+[recorder] [marker/marker_cam_01] 重置 spectrum.jsonl（本次运行结果，覆盖上次遗留）
+[recorder] [marker/marker_cam_01] 已写 .rec_done（该路结果全部落盘）
+[supervisor] [即时标注视频] pole_cam_01 → D:\Flexible_Photovoltaic_Support_Visual_Monitoring_System\output\pole\pole_cam_01\pole_cam_01_annotated.mp4 (h264=True, 已标注帧=391)
+[supervisor] [即时标注视频] marker_cam_01 → D:\Flexible_Photovoltaic_Support_Visual_Monitoring_System\output\marker\marker_cam_01\marker_cam_01_annotated.mp4 (h264=True, 已标注帧=297)
+[ WARN:1@60.094] global cap_ffmpeg_impl.hpp:453 _opencv_ffmpeg_interrupt_callback Stream timeout triggered after 30028.982000 ms
+[ WARN:0@65.249] global cap_ffmpeg_impl.hpp:453 _opencv_ffmpeg_interrupt_callback Stream timeout triggered after 30102.191000 ms
+[capture-pole_cam_02] pole_cam_02 打开摄像头失败（网络/凭证/通道？），5.0s 后重连: rtsp://admin:pass@192.0.2.1:554/streaming/Channels/101
+[ WARN:0@65.247] global cap_ffmpeg_impl.hpp:453 _opencv_ffmpeg_interrupt_callback Stream timeout triggered after 30103.111000 ms
+[capture-marker_cam_02] marker_cam_02 打开摄像头失败（网络/凭证/通道？），5.0s 后重连: rtsp://admin:pass@192.0.2.2:554/streaming/Channels/101
+[ WARN:0@90.191] global cap_ffmpeg_impl.hpp:453 _opencv_ffmpeg_interrupt_callback Stream timeout triggered after 30096.200000 ms
+[ WARN:0@100.263] global cap_ffmpeg_impl.hpp:453 _opencv_ffmpeg_interrupt_callback Stream timeout triggered after 30001.163000 ms
+[capture-pole_cam_02] pole_cam_02 打开摄像头失败（网络/凭证/通道？），5.0s 后重连: rtsp://admin:pass@192.0.2.1:554/streaming/Channels/101
+[ WARN:0@100.261] global cap_ffmpeg_impl.hpp:453 _opencv_ffmpeg_interrupt_callback Stream timeout triggered after 30001.737000 ms
+[capture-marker_cam_02] marker_cam_02 打开摄像头失败（网络/凭证/通道？），5.0s 后重连: rtsp://admin:pass@192.0.2.2:554/streaming/Channels/101

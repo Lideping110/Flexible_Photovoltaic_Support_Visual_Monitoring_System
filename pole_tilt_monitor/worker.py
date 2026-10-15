@@ -88,8 +88,9 @@ class PoleCameraSession:
             release_after_s=anchor_cfg["release_after_s"],
             ema_alpha=anchor_cfg["ema_alpha"], prefix="P")
         self.init_done = False
-        self.frame_saved = False
         self.last_frame = None  # 最近一帧，供 finalize_init 重绘首帧图
+        self.init_bg_frame = None  # 初始帧背景：首帧采一次，之后只在其上叠加已就绪基线的拟合线
+        self._drawn_key = None  # 上次重绘时的"已就绪基线集合"，变化才重绘（幂等防抖）
         self._init_wait_t0 = None  # 首次成功初始化前的等待计时（未建立则不锁死）
 
     def handle_init(self, dets, ts):
@@ -145,33 +146,44 @@ class PoleCameraSession:
     def persist_init(self, frame):
         """首帧图片 + 初始状态原子落盘（仅首次运行）。
 
-        早期快照：首个基线就绪时先存一版帧；最终一致性由 finalize_init 保证，
-        避免 init_frame.jpg 停留在早期/部分锚点状态（曾出现只有 1 根柱子的现象）。
+        背景固定为首帧（init_bg_frame，只在第一次拿到帧时采集一次），但**每根
+        柱子基线就绪时都重绘 init_frame.jpg**——把当前所有"已就绪基线"的拟合线
+        画到同一张首帧背景上。这样初始状态画面随基线逐步补齐而逐步出现拟合线，
+        不必等到进程退出 finalize_init 才一次性补全（修复"开始时只有第一根、
+        视频跑完后后面才拟合上"的观感，且 RTSP 实时流无需退出即可自愈）。
         """
         if not self.anchors.initialized or self.anchors.loaded_from_disk:
             return
         if frame is not None:
             self.last_frame = frame
-        if not self.frame_saved and self.last_frame is not None:
-            save_anchor_frame(self.last_frame, self.anchors.anchors, self.frame_path)
-            self.frame_saved = True
+            if self.init_bg_frame is None:
+                self.init_bg_frame = frame.copy()  # 背景只采一次，保持"首帧"语义
+        bg = self.init_bg_frame if self.init_bg_frame is not None else self.last_frame
+        # 仅当"已就绪基线集合"变化时才重绘帧（幂等防抖）：即使将来调用方改为
+        # 逐帧调用，也不会退化成逐帧 JPEG 编码+写盘；新增基线必触发重绘。
+        key = tuple(pid for pid in sorted(self.anchors.anchors)
+                    if self.anchors.get_baseline(pid) is not None)
+        if bg is not None and key != self._drawn_key:
+            # 保留首帧背景，叠加当前所有已就绪拟合线
+            save_anchor_frame(bg, self.anchors.anchors, self.frame_path)
+            self._drawn_key = key
         atomic_write_json(self.state_path, build_init_state(
             self.cam_id, "pole",
             [{**t, "baseline": self._baseline_payload(t["baseline"])}
              for t in self.anchors.to_targets()]))
 
     def finalize_init(self):
-        """退出时用最终锚点集（含全部基线）重绘 init_frame.jpg 并重写 state。
+        """退出时（或运行结束时）用最终锚点集重绘 init_frame.jpg 并重写 state。
 
-        关键作用：修复「init_frame.jpg 与 init_state.json 不一致」——之前
-        finally 里 `persist_init(None)` 会因 frame=None 跳过帧重绘、却仍写 state，
-        导致 state 已更新为 4 根柱子而帧仍停留在上次运行的 1 根柱子。这里用
-        last_frame 重绘，保证两者始终来自同一次运行、内容一致。
+        与 persist_init 共用同一首帧背景（init_bg_frame）；若运行期内已随基线
+        逐步重绘过，这里只是做最后一次一致性收尾，保证两者（帧与 json）始终
+        来自同一次运行、内容一致。
         """
         if not self.anchors.initialized or self.anchors.loaded_from_disk:
             return
-        if self.last_frame is not None:
-            save_anchor_frame(self.last_frame, self.anchors.anchors, self.frame_path)
+        bg = self.init_bg_frame if self.init_bg_frame is not None else self.last_frame
+        if bg is not None:
+            save_anchor_frame(bg, self.anchors.anchors, self.frame_path)
         atomic_write_json(self.state_path, build_init_state(
             self.cam_id, "pole",
             [{**t, "baseline": self._baseline_payload(t["baseline"])}
@@ -234,6 +246,12 @@ def run_pole_inference(cfg: dict, cameras: list, frame_queues: dict, result_q,
 
     online = {c["id"] for c in cameras}
     queues = [(c["id"], frame_queues[c["id"]]) for c in cameras]
+    # 已成功出过至少一帧的相机。攒批只等"已建立连接的相机"齐批；
+    # 从未连上的相机（如不可达 RTSP）不阻塞其他相机，避免其把整条队列
+    # 抽干（pending[cam] 覆盖写）导致前段帧被吞（实测：加不可达的
+    # pole_cam_02 后 pole_cam_01 前 ~15s 检测全丢）。相机一旦出帧即入 seen，
+    # 后续批次正常参与同步；若中途下线（SENTINEL）则从 seen 移除。
+    seen = set()
     log(tag, f"启动，摄像头: {sorted(online)}")
 
     # 文件源相机处理完成事件（收到该路 SENTINEL 且批次算完才发），供 supervisor
@@ -257,11 +275,17 @@ def run_pole_inference(cfg: dict, cameras: list, frame_queues: dict, result_q,
 
     try:
         while online and not stop_event.is_set():
-            # ---- 攒批：等齐所有在线摄像头或超时 ----
+            # ---- 攒批：等齐"已出过帧"的相机或超时 ----
             _flush_done()  # 上一轮批次已处理完的相机，发完成事件
             pending = {}
             batch_t0 = None
-            while len(pending) < len(online):
+            while True:
+                # 只等已经出过帧的相机齐批；从未连上的相机不阻塞本批。
+                # 这样不可达 RTSP（pole_cam_02）不会把 pole_cam_01 的整条队列
+                # 抽干、吞掉前段帧。seen 为空时（尚未有任何相机连上）继续等待。
+                need = [cid for cid in online if cid in seen]
+                if seen and len(pending) >= len(need):
+                    break
                 timeout = 1.0 if not pending else max(
                     0.01, batch_t0 + batch_timeout - time.perf_counter())
                 got = get_any(queues, timeout)
@@ -270,12 +294,14 @@ def run_pole_inference(cfg: dict, cameras: list, frame_queues: dict, result_q,
                 cam_id, item = got
                 if item is SENTINEL:
                     online.discard(cam_id)
+                    seen.discard(cam_id)
                     queues = [(cid, q) for cid, q in queues if cid != cam_id]
                     log(tag, f"{cam_id} 下线（剩余 {sorted(online)}）")
                     done_pending.add(cam_id)
                     continue
                 if cam_id in online:
                     pending[cam_id] = item
+                    seen.add(cam_id)
                     if batch_t0 is None:
                         batch_t0 = time.perf_counter()
             if not pending:

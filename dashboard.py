@@ -13,8 +13,8 @@ main 进程只做推理、把位移/频谱/测量结果写 jsonl，不发布任�
     GET  /                  大屏页面（左右分屏）
     GET  /api/state         JSON：左(立柱 初始+当前1s维持) / 右(测振 30s更新)
     GET  /api/marker_window?cam=<id>&t=<sec>
-                            视频文件播放联动：返回"以 t 结尾的最近 30s"窗口的时移
-                            曲线 + 同窗口振动分析（t 省略 → 最新窗口）
+                            视频文件播放联动：当前固定段曲线（横轴 0~30s）
+                            + 最近完成/EOF 尾段频谱（t 省略 → 最新窗口）
     GET  /video/<cam_id>   RTSP 相机 MJPEG 实时帧流（dashboard 直连子码流，纯原始画面）
 """
 import argparse
@@ -362,21 +362,15 @@ def _display_window(t, t_max, window_s, min_span_s, flush):
     if t_max is None or t_max <= 0:
         return None
     W = float(window_s)
-    need = min(float(min_span_s), W)
     last_k = int(t_max // W)
-    at_end = bool(flush) or (t is not None and t >= t_max - 1e-6)
+    at_end = bool(flush)
     if at_end:
         # t_max 恰好落在边界 → 末数据窗是 last_k-1（避免空窗 [30,30.1]
         # 被当成独立窗）；非 flush 的实时 latest 路径不走这里。
         if last_k * W >= t_max - 1e-9:
             last_k -= 1
         k = last_k
-        # 末尾若只剩一个"贴边空窗"（如 30.1s 的 [30,30.1]），回退到上一个完整窗
-        while k > 0 and (min((k + 1) * W, t_max) - k * W) < need - 1e-9:
-            k -= 1
-        # 短视频（仅一个窗）：末尾一律用全部数据，不受 min_span_s 挡
-        if last_k == 0 and t_max < W - 1e-9:
-            k = 0
+        # EOF 尾段不能因不足 min_span_s 回退到前窗；按实际剩余样本分析。
     else:
         if t is None:
             # 实时源没有“播放末尾”语义：t=None 时只展示已经完整结束的
@@ -395,22 +389,15 @@ def _display_window(t, t_max, window_s, min_span_s, flush):
 
 
 def _marker_f1_ref(spec_rows):
-    """索力归一基准：每条目标**首窗中 SNR 最高轴**的 f1（该轴即主链路认定的主频）。
-
-    不能简单取"文件里第一条"：同一窗口 dx/dy 各写一条、条目顺序不保证，而主链路
-    判定主频用的是"SNR 更高的那条轴"（见 _marker_analysis）。若基准恰好取了另一轴，
-    索力相对值会立刻偏离主链路口径（实测 M2 会算成 25 而非 100）。
-    """
-    # spectrum.jsonl 按 (pid, axis) 交错写入；历史版本也可能留下多段
-    # 从 0 重新开始的运行记录。先按轴截取最后一段，再在当前首窗中
-    # 选择 SNR 更高的轴，避免旧运行的第一条记录成为基准。
-    by_axis = {}
+    """读取每个目标首个垂向(dy)频谱，避免水平轴影响垂向分析基准。"""
+    # spectrum.jsonl 仍记录 dx/dy 两轴；看板的主频口径固定为 dy。
+    by_pid = {}
     for r in spec_rows:
         pid, axis = r.get("pid"), r.get("axis")
-        if pid and axis:
-            by_axis.setdefault((pid, axis), []).append(r)
+        if pid and axis == "dy":
+            by_pid.setdefault(pid, []).append(r)
     best = {}   # pid -> (ts, snr, f1)
-    for (pid, _axis), rows in by_axis.items():
+    for pid, rows in by_pid.items():
         times = [to_f(r.get("ts")) for r in rows]
         pairs = [(t, i) for i, t in enumerate(times) if t is not None]
         if not pairs:
@@ -485,33 +472,39 @@ def _marker_window(mdir: Path, t=None, window_s: float = 30.0,
     if not series_all or t_max is None:
         return {"t": None, "t_max": None, "series": {}, "spectra": {},
                 "analysis": {}, "window_s": window_s, "analysis_updated": None,
+                "curve_t0": None, "curve_t1": None,
                 "fft_ready": False, "fft_cover_s": 0.0,
                 "fft_need_s": round(min(float(min_span_s), float(window_s)), 1),
                 "fft_reason": "该时刻无数据", "note": "该时刻无数据"}
     W = float(window_s)
     # t 越界保护：负值/超长都夹到数据范围内，避免前端 currentTime 回绕时窗口空
-    cur = t_max if t is None else max(0.0, min(float(t), t_max))
-    # ---- 时移曲线：只展示当前时刻之前的最近一个窗口 ----
-    # 位移文件可能持续数小时；把从 0 秒开始的全部历史数据下发会让响应和
-    # 浏览器 canvas 随播放时间线性膨胀，也与界面上的“最近 N 秒”语义不符。
-    # 频谱仍按下面的固定不重叠窗口计算，曲线保留最近窗口长度的滚动范围。
-    curve_start = max(0.0, cur - W)
+    cur = t_max if t is None or flush else max(0.0, min(float(t), t_max))
+    # ---- 时移曲线：只展示当前固定窗口，并把时间重置为 0~W ----
+    # 频谱按 [0,W)、[W,2W) ... 固定分段；曲线也必须在进入下一段时从 0
+    # 重新开始，不能用 [cur-W, cur] 的滑动窗口把相邻两段拼在一起。
+    # 文件末尾 flush 时，曲线与尾部短窗口共用同一个起点。
+    display_t = cur if t is not None else None
+    bounds = _display_window(display_t, t_max, W, min_span_s, flush)
+    if flush and bounds is not None:
+        curve_start = bounds[0]
+    else:
+        curve_start = min(math.floor(cur / W) * W, max(0.0, t_max))
+    curve_end = min(cur, curve_start + W)
     series = {}
     for pid, samples in series_all.items():
         win_s = [s for s in samples
-                 if curve_start - 1e-9 <= s[0] <= cur + 1e-9]
+                 if curve_start - 1e-9 <= s[0] <= curve_end + 1e-9]
         if not win_s:
             continue
         series[pid] = {
-            "t": [round(s[0], 2) for s in win_s],
+            # 前端横轴使用窗口内相对秒，因此每个新窗口都从 0 开始。
+            "t": [round(s[0] - curve_start, 2) for s in win_s],
             "dx": [round(s[1], 3) for s in win_s],
             "dy": [round(s[2], 3) for s in win_s],
         }
     # ---- 频谱/主频：固定不重叠窗口，需窗口就绪（flush 或已完成窗）才出图 ----
     # t=None 表示“最新实时状态”，不是视频播放到 t_max；只有 file 源收尾
     # flush=True 才允许把当前未满固定窗的尾段作为一次短窗计算。
-    display_t = cur if t is not None else None
-    bounds = _display_window(display_t, t_max, W, min_span_s, flush)
     if bounds is None:
         # 还没到任何窗口的完成点：时移曲线照常逐帧显示，仅频谱提示"累积中"
         need = round(min(float(min_span_s), W), 1)
@@ -522,6 +515,7 @@ def _marker_window(mdir: Path, t=None, window_s: float = 30.0,
         return {
             "t": round(cur, 2), "t0": None, "t1": None, "t_max": round(t_max, 2),
             "window_s": W, "series": series, "spectra": {}, "analysis": {},
+            "curve_t0": round(curve_start, 2), "curve_t1": round(curve_end, 2),
             "analysis_updated": None,
             "fft_ready": False, "fft_cover_s": round(cover, 2),
             "fft_need_s": need,
@@ -532,44 +526,45 @@ def _marker_window(mdir: Path, t=None, window_s: float = 30.0,
     need_s = min(float(min_span_s), W)
     spectra = {}
     analysis = {}
+    partial_tail = bool(flush and (t1 - t0) < W - 1e-9)
+    effective_min_samples = 4 if partial_tail else int(min_samples)
+    effective_need_s = 0.0 if partial_tail else need_s
+    def in_fft_window(sample):
+        # 完整窗严格右开，只有文件尾窗包含实际最后一个采样点。
+        return sample[0] >= t0 and (sample[0] <= t1 if partial_tail else sample[0] < t1)
+
     gate_ready, gate_cover, gate_need = _fft_gate(
-        [[s[0] for s in samples
-          if t0 - 1e-9 <= s[0] < t1 + 1e-9]
+        [[s[0] for s in samples if in_fft_window(s)]
          for samples in series_all.values()],
-        window_s=W, min_samples=min_samples, min_span_s=min_span_s)
+        window_s=W, min_samples=effective_min_samples, min_span_s=effective_need_s)
     for pid, samples in series_all.items():
         # 取该固定窗内的样本（与主链路 _finalize 的 [seg*W, (seg+1)*W) 同口径）
-        win = [s for s in samples if t0 - 1e-9 <= s[0] < t1 + 1e-9]
+        win = [s for s in samples if in_fft_window(s)]
         if not win:
             continue
         ts = [s[0] for s in win]
-        amps = [math.hypot(s[1], s[2]) for s in win]
+        # “最大振幅”与主频使用同一物理方向：靶标画面 y 轴（上下振动）。
+        amps = [abs(s[2]) for s in win]
         amp = round(max(amps), 3) if amps else 0.0
         span = (ts[-1] - ts[0]) if len(ts) > 1 else 0.0
         # 样本数和实际时间跨度是独立门限，必须与主链路同时满足；
         # _segment_spectrum 本身只负责 FFT/SNR，不能替代这两个门控条件。
-        eligible = (gate_ready and len(win) >= int(min_samples)
-                    and span >= need_s - 1e-9)
-        # 两轴各算一次功率谱 + 主频，取 SNR 更高者作为该目标展示值（与主链路同口径）
-        best = None
-        for axis, idx in (("dx", 1), ("dy", 2)) if eligible else ():
-            sp = _window_spectrum(ts, [s[idx] for s in win], snr_min)
-            if sp is None:
-                continue
-            if best is None or sp["snr"] > best[1]["snr"]:
-                best = (axis, sp)
+        eligible = (gate_ready and len(win) >= effective_min_samples
+                    and span >= effective_need_s - 1e-9)
+        # 本看板评估靶标上下振动，主频与频谱统一只使用垂向 dy。
+        sp = (_window_spectrum(ts, [s[2] for s in win], snr_min)
+              if eligible else None)
         ref = (f1_ref or {}).get(pid)
-        if best is not None:
-            axis, sp = best
-            spectra[pid] = {"axis": axis, "freq": sp["freq"], "power": sp["power"]}
+        if sp is not None:
+            spectra[pid] = {"axis": "dy", "freq": sp["freq"], "power": sp["power"]}
             analysis[pid] = {
-                "max_amp_mm": amp,             # 真实：窗口内最大位移
+                "max_amp_mm": amp,             # 真实：窗口内最大垂向位移幅值
                 "f1_hz": sp["f1_hz"],          # 真实：窗口 FFT 主频（同主链路算法）
                 "snr": (round(sp["snr"], 1)
                         if sp["snr"] != float("inf") else None),
                 "n_samples": len(win),
                 "span_s": round(span, 2),
-                "axis": axis,
+                "axis": "dy",
                 "f1_ref_hz": round(ref, 4) if ref else None,
                 # 占位（未计算），见 _MARKER_PH —— 与 /api/state 的 analysis 同源
                 "deflection_mm": _MARKER_PH["deflection_mm"],
@@ -601,6 +596,7 @@ def _marker_window(mdir: Path, t=None, window_s: float = 30.0,
         "t": round(cur, 2), "t0": round(t0, 2), "t1": round(t1, 2),
         "t_max": round(t_max, 2), "window_s": W,
         "series": series, "spectra": spectra, "analysis": analysis,
+        "curve_t0": round(curve_start, 2), "curve_t1": round(curve_end, 2),
         # 标记实际完成的固定窗口终点，而不是当前流最新帧 t_max；两者在
         # RTSP 窗口累积期间通常不同。
         "analysis_updated": round(t1, 1),
@@ -634,28 +630,27 @@ def _marker_analysis(spec_rows, recent, f1_ref):
     """由频谱行 + 时移序列汇总每目标的分析数据。
 
     既用于实时（最新窗口），也用于初始（首窗）分析——同源计算，初始即首窗结果。
-    其中 max_amp_mm / f1_hz 是真实计算结果；deflection_mm / cable_force_idx 是
+    其中 max_amp_mm / f1_hz 是真实的垂向位移幅值与 dy 主频；deflection_mm / cable_force_idx 是
     占位值（见 _MARKER_PH 说明），不做计算。
     """
     latest_spec = {}
     for r in spec_rows:
         pid = r.get("pid")
         ax = r.get("axis")
-        latest_spec.setdefault(pid, {})[ax] = r
+        if pid and ax == "dy":
+            latest_spec[pid] = r
     analysis = {}
     for pid in set(latest_spec) | set(recent):
-        axes = latest_spec.get(pid, {})
-        best = None
-        for ax, r in axes.items():
-            if best is None or (r.get("snr") or 0) > (best.get("snr") or 0):
-                best = r
-        f1 = round(float(best["f1_hz"]), 4) if best else None
+        best = latest_spec.get(pid)
+        f1_value = to_f(best.get("f1_hz")) if best else None
+        f1 = round(f1_value, 4) if f1_value is not None else None
         ref = f1_ref.get(pid)
-        amps = [math.hypot(s["dx"], s["dy"]) for s in recent.get(pid, [])]
+        amps = [abs(s["dy"]) for s in recent.get(pid, [])]
         amp = round(max(amps), 3) if amps else 0.0
         analysis[pid] = {
-            "max_amp_mm": amp,          # 真实：窗口内最大位移（原样保留）
+            "max_amp_mm": amp,          # 真实：窗口内最大垂向位移幅值
             "f1_hz": f1,                # 真实：FFT 主频（原样保留）
+            "axis": "dy" if best else None,
             "snr": round(float(best["snr"]), 1) if best else None,
             "f1_ref_hz": round(ref, 4) if ref else None,
             # 下面两项为占位（未计算），见 _MARKER_PH
@@ -830,7 +825,8 @@ def _marker_camera_state(output_dir, cid, cam_info, fft_cfg):
     info = (cam_info or {}).get(cid) or {}
     # 持续 RTSP 源没有“播放末尾”；只能展示已完成的固定 FFT 窗口。
     # 本地文件源在 /api/state 中允许 flush，以便短视频收尾时展示整段结果。
-    flush_latest = info.get("source_type") == "file"
+    flush_latest = (info.get("source_type") == "file"
+                    and (mdir / ".rec_done").is_file())
     latest = load_json(mdir / "latest.json") or {}
     targets = latest.get("targets") or {}
     spec_rows = load_spectrum_rows(mdir / "spectrum.jsonl")
@@ -860,9 +856,10 @@ def _marker_camera_state(output_dir, cid, cam_info, fft_cfg):
         "analysis": win["analysis"],
         "init_analysis": _build_init_analysis(mdir, spec_rows, f1_ref,
                                                window_s=window_s),
-        "analysis_updated": round(max((to_f(r.get("ts")) for r in spec_rows),
-                                      default=0.0), 1),
+        "analysis_updated": win["analysis_updated"],
         "series": series,
+        "curve_t0": win.get("curve_t0"), "curve_t1": win.get("curve_t1"),
+        "t0": win.get("t0"), "t1": win.get("t1"),
         "spectra": win.get("spectra", {}),
         "fft_ready": ready,
         "fft_cover_s": win["fft_cover_s"],
@@ -1274,6 +1271,10 @@ class Handler:
         数据算一次固定窗（与"0-30 算一次、不足 30s 末尾用全部数据"的口径一致）。
         """
         mdir = self.output_dir / "marker" / cam
+        info = (self.cam_info or {}).get(cam) or {}
+        # 未结束文件/流源不能通过 flush 查询参数提前发布尾段。
+        flush = bool(flush and info.get("source_type") == "file"
+                     and (mdir / ".rec_done").is_file())
         f1_ref = _marker_f1_ref(load_spectrum_rows(mdir / "spectrum.jsonl"))
         win = _marker_window(
             mdir, t=t, window_s=self.marker_window_s,
@@ -1615,13 +1616,14 @@ HTML_TEMPLATE = r"""<!DOCTYPE html>
       <div class="viewpane" data-panel="marker" data-view="live" style="display:none">
         <div class="sec-bar"><label>选择相机：</label><select id="markerLiveSel" class="camsel"></select></div>
         <div class="media-box" id="markerLiveMedia"></div>
-        <div class="sec-title">时移曲线（最近__MARKER_WINDOW_S__s 位移 mm）<span id="markerWinInfo" class="wininfo"></span></div>
+        <div class="sec-title">垂向位移曲线 dy（当前 0~__MARKER_WINDOW_S__s 窗口，mm）<span id="markerWinInfo" class="wininfo"></span></div>
         <div class="charts">
           <canvas id="chartShift" height="120"></canvas>
           <canvas id="chartSpectrum" height="120"></canvas>
         </div>
-        <div class="sec-title">振动分析（每__MARKER_WINDOW_S__s更新 · <span id="anaTime"></span>）</div>
-        <table id="markerAnaTbl"><thead><tr><th>目标</th><th>最大振幅(mm)</th><th>主频率(Hz)</th><th>挠度(mm)<span class="ph">占位</span></th><th>索力(相对)<span class="ph">占位</span></th></tr></thead><tbody></tbody></table>
+        <div class="sec-title">垂向频谱 dy（每__MARKER_WINDOW_S__s更新）</div>
+        <div class="sec-title">上下振动分析（主频基于 dy · 每__MARKER_WINDOW_S__s更新 · <span id="anaTime"></span>）</div>
+        <table id="markerAnaTbl"><thead><tr><th>目标</th><th>最大振幅(mm)</th><th>上下振动主频率 dy (Hz)</th><th>挠度(mm)<span class="ph">占位</span></th><th>索力(相对)<span class="ph">占位</span></th></tr></thead><tbody></tbody></table>
       </div>
     </div>
   </div>
@@ -1629,6 +1631,7 @@ HTML_TEMPLATE = r"""<!DOCTYPE html>
 
 <script>
 const PAD = {l:38,r:10,t:10,b:18};
+const MARKER_WINDOW_S = Number("__MARKER_WINDOW_S__") || 30;
 function drawAxes(ctx,w,h,ymin,ymax,label){ ctx.strokeStyle="#26303f"; ctx.lineWidth=1;
   ctx.beginPath(); ctx.moveTo(PAD.l, PAD.t); ctx.lineTo(PAD.l,h-PAD.b); ctx.lineTo(w-PAD.r,h-PAD.b); ctx.stroke();
   ctx.fillStyle="#5b6776"; ctx.font="10px sans-serif"; ctx.textAlign="right";
@@ -1661,15 +1664,26 @@ function drawSeries(canvas, list){
   const ctx=canvas.getContext("2d"); const w=canvas.width=canvas.clientWidth, h=canvas.height=canvas.clientHeight;
   ctx.clearRect(0,0,w,h);
   const valid=(list||[]).filter(s=>s&&s.data&&s.data.length>0);
-  if(valid.length===0){ ctx.fillStyle="#5b6776"; ctx.font="11px sans-serif"; ctx.fillText("等待数据…",PAD.l+30,h/2); return; }
   let lo=Infinity, hi=-Infinity;
   valid.forEach(s=>s.data.forEach(v=>{ if(v<lo)lo=v; if(v>hi)hi=v; }));
+  if(!valid.length){ lo=-1; hi=1; }
   if(hi-lo<1e-6){ hi+=1; lo-=1; }
   const pad=(hi-lo)*0.1; lo-=pad; hi+=pad;
-  drawAxes(ctx,w,h,lo,hi,"mm");
+  drawAxes(ctx,w,h,lo,hi,"mm · 时间(s)");
+  ctx.fillStyle="#3f4a58"; ctx.font="9px sans-serif"; ctx.textAlign="center";
+  for(let i=0;i<=2;i++){
+    const sec=MARKER_WINDOW_S*i/2;
+    ctx.fillText(sec.toFixed(sec%1?1:0), PAD.l+(w-PAD.l-PAD.r)*i/2, h-PAD.b+13);
+  }
+  if(!valid.length){ ctx.fillStyle="#5b6776"; ctx.font="11px sans-serif"; ctx.textAlign="left"; ctx.fillText("等待数据…",PAD.l+30,h/2); return; }
   valid.forEach(s=>{
     ctx.strokeStyle=s.color; ctx.lineWidth=1.6; ctx.beginPath();
-    const n=s.data.length; const x=i=>PAD.l+(w-PAD.l-PAD.r)*i/(n-1||1);
+    const n=s.data.length;
+    const x=i=>{
+      const sec=(s.t&&s.t.length===n)?Number(s.t[i]):MARKER_WINDOW_S*i/(n-1||1);
+      const ratio=Math.max(0,Math.min(1,sec/MARKER_WINDOW_S));
+      return PAD.l+(w-PAD.l-PAD.r)*ratio;
+    };
     s.data.forEach((v,i)=>{ const y=PAD.t+(h-PAD.t-PAD.b)*(1-(v-lo)/(hi-lo||1)); i?ctx.lineTo(x(i),y):ctx.moveTo(x(i),y); });
     ctx.stroke();
   });
@@ -1693,7 +1707,7 @@ function drawSpectrum(canvas, specs, gate, ana){
   const valid=specs.filter(s=>s&&s.freq&&s.power&&s.freq.length);
   if(valid.length===0){ ctx.fillStyle="#5b6776"; ctx.font="11px sans-serif"; ctx.fillText("等待数据…",PAD.l+30,h/2); return; }
   let hi=0; valid.forEach(o=>o.power.forEach(p=>{ if(p>hi) hi=p; })); hi=hi||1;
-  drawAxes(ctx,w,h,0,hi,"幅值 · Hz");
+  drawAxes(ctx,w,h,0,hi,"dy功率 · Hz");
   valid.forEach(o=>{
     // 只画 0~FMAX 区间（结构振动主频在低段，超出的高频细节无意义）
     const pts=[];
@@ -1871,10 +1885,17 @@ function renderLiveMedia(panel, st, force){
   box.dataset.srctype=src.type;
   box.dataset.media=src.media||"";
   if(panel==="pole"){
-    // 记录当前相机时间线，并给文件视频挂 timeupdate 做"当前状态随播放联动"
+    // 记录当前相机时间线，并给文件视频挂事件做"当前状态随播放联动"
     poleTimeline = (cams[cid] && cams[cid].timeline) || root.timeline || [];
     const v=box.querySelector("video");
-    if(v) v.addEventListener("timeupdate", ()=>onPoleVideoTime(v));
+    if(v){
+      // 播放/暂停/拖动进度条/回绕都按"当前时间"取快照并锁定表格；
+      // 暂停点即用户要看的时刻，绝不回退到最新（与 marker 的 pause/seeked/ended 处理对齐）。
+      v.addEventListener("timeupdate", ()=>onPoleVideoTime(v));
+      v.addEventListener("seeked", ()=>onPoleVideoTime(v, true));
+      v.addEventListener("pause", ()=>onPoleVideoTime(v, true));
+      v.addEventListener("ended", ()=>onPoleVideoTime(v, true));
+    }
   } else {
     // 右侧测振：文件源由播放时间驱动时移曲线 + 振动分析（流源无 currentTime，保持最新）
     markerIsFile = (src.type==="file");
@@ -1971,7 +1992,7 @@ function applyMarkerWindow(w, paused){
   const sPids=Object.keys(sM);
   if(sPids.length) pidOrder=[...new Set([...pidOrder,...sPids,...Object.keys(w.analysis||{})])];
   // 时移曲线：固定窗口内的累计位移（dy）
-  const list=sPids.map(p=>({name:p,data:sM[p].dy,color:colorOf(p,pidOrder)}));
+  const list=sPids.map(p=>({name:p,t:sM[p].t,data:sM[p].dy,color:colorOf(p,pidOrder)}));
   lastShiftList=list;
   lastDt=dtOf(sPids.length? sM[sPids[0]].t : null);
   // 频谱曲线：直接画后端下发的功率谱（freq/power）——不再本地 FFT，保证与主链路同源
@@ -1982,8 +2003,13 @@ function applyMarkerWindow(w, paused){
   lastAna=w.analysis||{};
   if(isViewActive("marker","live")) drawCharts();
   const info=document.getElementById("markerWinInfo");
-  if(info) info.textContent=(w.t0!=null&&w.t1!=null)
-    ? `窗口 ${w.t0}~${w.t1}s${paused?" ⏸已暂停":""}` : "窗口累积中…";
+  if(info){
+    const curveInfo=(w.curve_t0!=null&&w.curve_t1!=null)
+      ? `曲线 ${w.curve_t0}~${w.curve_t1}s` : "曲线累积中";
+    const fftInfo=(w.t0!=null&&w.t1!=null)
+      ? `频谱 ${w.t0}~${w.t1}s` : "频谱累积中";
+    info.textContent=`${curveInfo} · ${fftInfo}${paused?" ⏸已暂停":""}`;
+  }
   // "为什么没值"的提示语由后端给（它才知道是样本不足还是首窗未满），前端不再另算
   const label=(w.t1!=null)
     ? `ts ${w.t1}s · 窗口 ${w.t0}~${w.t1}s${w.note?"（"+w.note+"）":""}`
@@ -1993,7 +2019,7 @@ function applyMarkerWindow(w, paused){
 }
 
 // 按给定快照渲染左面板"当前状态"表 + 帧秒标题（播放联动与 latest 共用）
-function renderPoleCurrent(frame_id, ts, poles, P){
+function renderPoleCurrent(frame_id, ts, poles, P, paused){
   const ct=document.querySelector("#poleCurTbl tbody");
   if(ct){ ct.innerHTML="";
     if(!Object.keys(poles||{}).length){
@@ -2018,32 +2044,31 @@ function renderPoleCurrent(frame_id, ts, poles, P){
     }
     const sec = (ts!=null)? Math.round(Number(ts)) : ((frame_id!=null)? frame_id+1 : 0);
     el.textContent =
-      "frame_id "+(frame_id!=null?frame_id:"?")+" · t="+(ts!=null?Number(ts).toFixed(1):"?")+"s（第 "+sec+" 秒快照）";
+      "frame_id "+(frame_id!=null?frame_id:"?")+" · t="+(ts!=null?Number(ts).toFixed(1):"?")+"s（第 "+sec+" 秒快照）"+(paused?" · ⏸已暂停":"");
   }
 }
 
-// 视频播放时间 → 在时间线里取 ts<=currentTime 的最近快照，驱动"当前状态"表
-function onPoleVideoTime(video){
+// 视频播放时间 → 在时间线里取 ts<=currentTime 的最近快照，驱动"当前状态"表。
+// 播放/暂停/拖动进度条/回绕都按"当前时间"取快照，并锁定表格不被 tick 的"最新"覆盖；
+// 暂停点即用户要看的时刻，绝不回退到最新（修复：旧逻辑在 timeupdate 的 else 分支
+// 把表格重置为 PA.current，导致点击暂停后"当前状态"直接跳到最新状态）。
+function onPoleVideoTime(video, force){
   const st=window.__state; if(!st || !st.pole) return;
   const P=st.pole;
   const sel=document.getElementById("poleLiveSel");
   const cid=(sel && sel.value) || P.cam_id;
-  // 播放/暂停都必须使用下拉框当前相机的状态；此前暂停会回退到
-  // P.current（主相机），多相机时导致画面是 A、表格却跳到 B。
+  // 播放/暂停都必须使用下拉框当前相机的状态；否则多相机时画面是 A、表格却跳到 B。
   const PA=(P.cams && P.cams[cid]) || P;
   const tl=poleTimeline;
   if(!tl || !tl.length) return;
-  const playing = !video.paused && !video.ended;
-  if(playing){
-    const t=video.currentTime;
-    let snap=tl[0];
-    for(const e of tl){ if(e.ts!=null && e.ts <= t+1e-6) snap=e; else break; }
-    renderPoleCurrent(snap.frame_id, snap.ts, snap.poles, PA);
-    poleSyncing=true;
-  } else {
-    poleSyncing=false;
-    renderPoleCurrent(PA.frame_id, PA.frame_ts, PA.current, PA);  // 暂停/结束回 selected latest
-  }
+  const paused = !!video.paused || !!video.ended;
+  const t=Number(video.currentTime)||0;
+  let snap=tl[0];
+  for(const e of tl){ if(e.ts!=null && e.ts <= t+1e-6) snap=e; else break; }
+  renderPoleCurrent(snap.frame_id, snap.ts, snap.poles, PA, paused);
+  // 锁定：文件视频播放/暂停联动期间，tick 不得用"最新"覆盖（流源无 timeupdate，
+  // 该值保持 false，表格自动跟随 latest）。
+  poleSyncing=true;
 }
 
 function setupViewSwitch(){
@@ -2192,9 +2217,13 @@ async function tick(){
     if(!markerSyncing){
       const sM=MA.series||{};
       pidOrder=[...new Set([...Object.keys(sM),...Object.keys(MA.analysis||{})])].sort();
-      const shiftList=pidOrder.filter(p=>sM[p]).map(p=>({name:p,data:sM[p].dy,color:colorOf(p,pidOrder)}));
+      const shiftList=pidOrder.filter(p=>sM[p]).map(p=>({name:p,t:sM[p].t,data:sM[p].dy,color:colorOf(p,pidOrder)}));
       const dt=dtOf(shiftList.length? sM[shiftList[0].name].t : null);
       lastShiftList=shiftList; lastDt=dt;
+      const info=document.getElementById("markerWinInfo");
+      if(info) info.textContent=(MA.curve_t0!=null)
+        ? `曲线 ${MA.curve_t0}~${MA.curve_t1}s · ${MA.t0!=null ? `频谱 ${MA.t0}~${MA.t1}s` : "频谱累积中"}`
+        : "等待数据…";
       chartGate={ready:!!MA.fft_ready, reason:MA.fft_reason||"", cover:MA.fft_cover_s||0, need:MA.fft_need_s||0};
       lastAna=MA.analysis||{};
       // 频谱曲线：直接画后端下发的功率谱（freq/power），不再本地 FFT，保证与主链路同源。

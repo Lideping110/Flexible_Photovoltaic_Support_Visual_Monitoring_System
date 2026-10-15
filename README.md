@@ -64,7 +64,7 @@ output/
 │   └── init/{init_frame.jpg, init_state.json}    # 初始基准
 └── marker/{cam_id}/
     ├── displacement.jsonl                        # 逐帧位移（px/mm）
-    ├── spectrum.jsonl                            # 每 30s 主频记录
+    ├── spectrum.jsonl                            # 每 30s 保存 dx、dy 两轴频谱；Web 只展示 dy
     ├── latest.json
     ├── {cam_id}_annotated.mp4                    # main 收尾自动生成（仅 file 源相机）
     └── init/...
@@ -162,8 +162,8 @@ node tools/frontend_probe.js                                  # 再跑探针
 
 | 列 | 来源 | 性质 |
 |---|---|---|
-| 最大振幅(mm) | 窗口内位移模长的最大值 × `mm_per_px` | 真实计算 |
-| 主频率(Hz) | 窗口 FFT（复用主链路 `_segment_fft`，门限取 `marker.fft`）| 真实计算 |
+| 最大振幅(mm) | 窗口内垂向位移 `abs(dy)` 的最大值 | 真实计算 |
+| 上下振动主频率 dy (Hz) | 垂向位移 `dy` 的窗口 FFT（复用主链路 `_segment_fft`，门限取 `marker.fft`）| 真实计算 |
 | 挠度(mm) | `config.marker.placeholder.deflection_mm` | **占位** |
 | 索力(相对) | `config.marker.placeholder.cable_force_idx` | **占位** |
 

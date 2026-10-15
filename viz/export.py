@@ -8,37 +8,57 @@
 明确跳过并提示先录制成文件。
 """
 import os
+import shutil
 import subprocess
+import time
 from pathlib import Path
 
+from utils.common import log
 from .readers import group_by_frame, load_jsonl
 from .render import render_annotated_video
 
 JSONL_KIND = {"pole": "measurements", "marker": "displacement"}
 
 
-def _to_h264(path: Path) -> bool:
+def _to_h264(path: Path, attempts: int = 3) -> bool:
     """把 OpenCV 写的 mp4v 标注视频转成浏览器可播的 H.264 + faststart。
 
     OpenCV 的 VideoWriter 默认 mp4v（MPEG-4 Part 2），现代浏览器 <video> 不解码；
-    用 ffmpeg 二次封装为 libx264 + faststart。ffmpeg 不可用则保留 mp4v。
+    用 ffmpeg 二次封装为 libx264 + faststart。
+    ffmpeg 偶发在进程启动压力下 fork 失败 / 临时文件被占用 → 重试若干次，
+    全部失败才返回 False（由调用方标记转码失败，绝不把不可播 mp4v 当成成功）。
+    ffmpeg 本身不可用则直接失败（重试无意义）。
     """
-    tmp = path.with_suffix(".h264.tmp.mp4")
-    try:
-        subprocess.run(
-            ["ffmpeg", "-y", "-i", str(path), "-c:v", "libx264",
-             "-preset", "veryfast", "-crf", "23", "-pix_fmt", "yuv420p",
-             "-movflags", "+faststart", "-an", str(tmp)],
-            check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-        os.replace(str(tmp), str(path))  # 原子替换
-        return True
-    except Exception:
-        if tmp.is_file():
-            try:
-                tmp.unlink()
-            except Exception:
-                pass
+    if shutil.which("ffmpeg") is None:
+        log("export", "ffmpeg 不可用，无法转码为浏览器可播的 H.264（保留不可播的 mp4v）")
         return False
+    last_err = None
+    for attempt in range(1, attempts + 1):
+        tmp = path.with_suffix(f".h264.tmp{attempt}.mp4")
+        try:
+            subprocess.run(
+                ["ffmpeg", "-y", "-i", str(path), "-c:v", "libx264",
+                 "-preset", "veryfast", "-crf", "23", "-pix_fmt", "yuv420p",
+                 "-movflags", "+faststart", "-an", str(tmp)],
+                check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+            # 原子替换；若目标正被浏览器读取（WinError 5）则稍等重试替换
+            try:
+                os.replace(str(tmp), str(path))
+            except OSError:
+                time.sleep(0.5)
+                os.replace(str(tmp), str(path))
+            return True
+        except Exception as exc:  # noqa: BLE001
+            last_err = exc
+            if tmp.is_file():
+                try:
+                    tmp.unlink()
+                except Exception:
+                    pass
+            if attempt < attempts:
+                time.sleep(0.4 * attempt)  # 退避，错开进程启动压力
+    log("export", f"_to_h264 重试 {attempts} 次仍失败: {last_err}")
+    return False
 
 
 def export_cam_video(cam: dict, output_dir, pole_mode: str, out_dir,
@@ -90,6 +110,27 @@ def export_cam_video(cam: dict, output_dir, pole_mode: str, out_dir,
         dump_dir=dump_dir, dump_max=dump_frames,
         baseline_poles=baseline_poles)
     stats["cam"] = cam["id"]
-    stats["status"] = "ok"
-    stats["h264"] = _to_h264(out_path)
+    h264 = _to_h264(out_path)
+    stats["h264"] = h264
+    fail_marker = out_dir / ".export_failed"
+    if h264:
+        stats["status"] = "ok"
+        # 本轮成功，清除可能存在的失败标记
+        try:
+            fail_marker.unlink()
+        except FileNotFoundError:
+            pass
+        except Exception:
+            pass
+    else:
+        # 绝不把不可播的 mp4v（MPEG-4 Part2）当成成功：大屏据此显示"转码失败"
+        # 而非静默喂给浏览器一个解码不了的 video。
+        stats["status"] = "failed"
+        stats["reason"] = ("转码为浏览器可播的 H.264 失败：浏览器无法解码 MPEG-4 "
+                           "Part2，请用本地播放器查看或重跑本相机")
+        try:
+            fail_marker.write_text(stats["reason"], encoding="utf-8")
+        except Exception:
+            pass
+        log("export", f"{cam['id']} 标注视频转码失败（mp4v 不可播），已写 .export_failed")
     return stats

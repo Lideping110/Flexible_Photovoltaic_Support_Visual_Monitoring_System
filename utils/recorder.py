@@ -65,6 +65,7 @@ def run_recorder(result_q, output_dir, stop_event):
     output_dir.mkdir(parents=True, exist_ok=True)
     handles = {}          # (branch, cam_id, kind) -> file handle
     latest = {}           # cam_id -> _LatestState
+    marker_done = {}      # cam_id -> {"inference": bool, "spectrum": bool, "ts": ...}
     events_path = output_dir / "events.jsonl"
     events_f = events_path.open("a", encoding="utf-8")
     log(tag, f"启动，输出目录 {output_dir}")
@@ -113,6 +114,24 @@ def run_recorder(result_q, output_dir, stop_event):
             # supervisor 判定关键进程异常 → 全系统终止）。记警告，下条消息再试。
             log(tag, f"[{branch}/{cam_id}] latest.json 写入失败，已跳过本次快照: {exc}")
 
+    def _finish_camera(branch, cam_id, ts):
+        """两路 marker 生产者都完成后，才标记该相机结果真正落盘。"""
+        rec_d = output_dir / branch / cam_id
+        try:
+            rec_d.mkdir(parents=True, exist_ok=True)
+            rec_d.joinpath(".rec_done").write_text(
+                json.dumps({"cam_id": cam_id, "ts": ts}, ensure_ascii=False),
+                encoding="utf-8")
+            log(tag, f"[{branch}/{cam_id}] 已写 .rec_done（该路结果全部落盘）")
+        except Exception as exc:
+            log(tag, f"[{branch}/{cam_id}] .rec_done 写入失败: {exc}")
+        for k in [k for k in handles if k[0] == branch and k[1] == cam_id]:
+            try:
+                handles[k].close()
+            except Exception:
+                pass
+            handles.pop(k, None)
+
     try:
         while not stop_event.is_set():
             try:
@@ -156,22 +175,33 @@ def run_recorder(result_q, output_dir, stop_event):
                 # 是 FIFO）已写完并 flush → 此刻 jsonl 已完整。完成标记由 **Recorder
                 # 这一最后一环**亲自发出，是"数据确实落盘"的确定性事件，取代
                 # "jsonl 不增长了"的猜测判据（无目标时段不写行会让那个判据误判）。
-                try:
-                    rec_d = output_dir / branch / cam_id
-                    rec_d.mkdir(parents=True, exist_ok=True)
-                    rec_d.joinpath(".rec_done").write_text(
-                        json.dumps({"cam_id": cam_id, "ts": ts}, ensure_ascii=False),
-                        encoding="utf-8")
-                    log(tag, f"[{branch}/{cam_id}] 已写 .rec_done（该路结果全部落盘）")
-                except Exception as exc:
-                    log(tag, f"[{branch}/{cam_id}] .rec_done 写入失败: {exc}")
-                # 关闭该路 jsonl 句柄：避免导出进程读取时被 Windows 文件占用挡住
-                for k in [k for k in handles if k[0] == branch and k[1] == cam_id]:
-                    try:
-                        handles[k].close()
-                    except Exception:
-                        pass
-                    handles.pop(k, None)
+                if branch == "marker":
+                    # 兼容没有独立 spectrum_done 的旧/测试生产者：直接完成。
+                    marker_done[cam_id] = {"inference": True, "spectrum": True,
+                                          "ts": ts}
+                    _finish_camera(branch, cam_id, ts)
+                else:
+                    _finish_camera(branch, cam_id, ts)
+                continue
+
+            if kind == "camera_inference_done" and branch == "marker":
+                state = marker_done.setdefault(cam_id, {"inference": False,
+                                                         "spectrum": False,
+                                                         "ts": ts})
+                state["inference"] = True
+                state["ts"] = ts
+                if state["spectrum"]:
+                    _finish_camera(branch, cam_id, state["ts"])
+                continue
+
+            if kind == "spectrum_done" and branch == "marker":
+                state = marker_done.setdefault(cam_id, {"inference": False,
+                                                         "spectrum": False,
+                                                         "ts": ts})
+                state["spectrum"] = True
+                state["ts"] = ts
+                if state["inference"]:
+                    _finish_camera(branch, cam_id, state["ts"])
                 continue
 
             if kind == "measurement" and branch == "pole":

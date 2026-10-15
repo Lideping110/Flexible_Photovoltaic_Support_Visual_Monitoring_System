@@ -48,7 +48,7 @@ def main() -> int:
                         help="只运行采集/推理，不启动 Web 大屏")
     parser.add_argument("--dashboard-host", default="127.0.0.1",
                         help="Web 大屏监听地址（默认 127.0.0.1）")
-    parser.add_argument("--dashboard-port", type=int, default=8023,
+    parser.add_argument("--dashboard-port", type=int, default=8000,
                         help="Web 大屏监听端口（默认 8023）")
     args = parser.parse_args()
 

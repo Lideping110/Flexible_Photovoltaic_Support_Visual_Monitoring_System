@@ -70,6 +70,7 @@ def _validate_cameras(cfg: dict) -> None:
         if task not in VALID_TASKS:
             raise ValueError(f"cameras[{i}].task 必须是 {VALID_TASKS} 之一，当前: {task}")
         url = cam.get("url")
+        # print('=========================',cam)
         if not url:
             raise ValueError(f"cameras[{i}].url 缺失")
         calib = cam.get("calibration")

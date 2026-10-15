@@ -1,8 +1,9 @@
 """主频分析进程（SpectrumAnalyzer，全局唯一，属靶标分支）。
 
 消费各 marker 摄像头的累计位移时序样本（cam_id, pid, t, dx_mm, dy_mm），
-按固定不重叠 window_s 秒窗口分段，对每个 (cam_id, pid, axis) 做 FFT 提取主频，
-SNR 门控通过后产出 spectrum 记录发往 Recorder。
+按固定不重叠 window_s 秒窗口分段，对每个目标的 dx、dy 两个轴分别做 FFT 提取主频，
+SNR 门控通过后将两轴结果都产出到 spectrum.jsonl。Dashboard 展示层再固定选择 dy，
+用于评估靶标上下振动。
 """
 import time
 
@@ -82,7 +83,7 @@ def run_spectrum_analyzer(window_s: float, snr_min: float, min_samples: int,
     log(tag, f"启动，窗口 {window}s, SNR>={snr_min}, 最少 {min_samples} 样本"
              f", 最小跨度 {span_need:g}s")
 
-    def _finalize(key, seg):
+    def _finalize(key, seg, allow_partial=False):
         buf = buffers.get(key)
         if buf is None:
             return
@@ -91,24 +92,27 @@ def run_spectrum_analyzer(window_s: float, snr_min: float, min_samples: int,
                    if t0 <= t < t1]
         buf["samples"] = [(t, dx, dy) for t, dx, dy in buf["samples"] if t >= t1]
         cam_id, pid = key
+        # 原始频谱文件保留两个方向；Dashboard 展示层固定选择 dy（上下振动）。
         for axis, idx in (("dx", 1), ("dy", 2)):
             ts = [s[0] for s in samples]
             ys = [s[idx] for s in samples]
-            if len(ts) < min_samples:
+            # EOF 尾段按实际样本计算，至少保留 FFT 所需的 4 个点。
+            if len(ts) < (4 if allow_partial else min_samples):
                 continue
             # min_samples 只约束数量；高频或突发重采样可能在很短的时间
             # 内凑够数量，仍不能形成可靠的低频谱。Dashboard 使用同一门限。
-            if span_need > 0.0 and (len(ts) < 2 or
+            if not allow_partial and span_need > 0.0 and (len(ts) < 2 or
                                     (ts[-1] - ts[0]) < span_need - 1e-9):
                 continue
             r = _segment_fft(ts, ys, snr_min)
             if r is None:
                 continue
             f1, snr, n = r
+            result_t1 = samples[-1][0] if allow_partial else t1
             put_blocking(result_q, {
                 "branch": "marker", "kind": "spectrum", "cam_id": cam_id,
-                "ts": t1,  # 与位移记录同一时间基准（视频相对秒）
-                "data": {"pid": pid, "axis": axis, "t0": t0, "t1": t1,
+                "ts": result_t1,  # 尾段记录实际终点，而非虚构的整窗终点
+                "data": {"pid": pid, "axis": axis, "t0": t0, "t1": result_t1,
                          "f1_hz": f1, "snr": snr, "n_samples": n},
             })
 
@@ -120,6 +124,17 @@ def run_spectrum_analyzer(window_s: float, snr_min: float, min_samples: int,
                 continue
             if item is SENTINEL:
                 break
+            if item.get("kind") == "camera_done":
+                # 单路文件 EOF 不必等待其他相机（尤其是永不结束的 RTSP）。
+                cid = item["cam_id"]
+                for key in [key for key in buffers if key[0] == cid]:
+                    _finalize(key, buffers[key]["last_seg"], allow_partial=True)
+                    buffers.pop(key, None)
+                put_blocking(result_q, {
+                    "branch": "marker", "kind": "spectrum_done",
+                    "cam_id": cid, "ts": item.get("ts"),
+                })
+                continue
             key = (item["cam_id"], item["pid"])
             buf = buffers.setdefault(key, {"samples": [], "last_seg": -1})
             seg = int(float(item["t"]) // window)
@@ -136,5 +151,5 @@ def run_spectrum_analyzer(window_s: float, snr_min: float, min_samples: int,
             buf = buffers[key]
             for k in range(buf["last_seg"], int(buf["samples"][-1][0] // window) + 1
                            if buf["samples"] else buf["last_seg"] + 1):
-                _finalize(key, k)
+                _finalize(key, k, allow_partial=True)
         log(tag, "退出")

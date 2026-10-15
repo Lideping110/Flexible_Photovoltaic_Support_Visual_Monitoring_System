@@ -7,7 +7,7 @@
 cameras:
   - id: pole_cam_01
     # RTSP 实时流（现场部署示例）：
-    #   "rtsp://admin:password@192.168.1.64:554/streaming/Channels/101"
+      # "rtsp://admin:password@192.168.1.64:554/streaming/Channels/101"
     # 当前为联调测试，使用本地视频文件。
     # url: "1080/1080.mp4"
     url: "rtsp://admin:hhjt220220@192.168.1.65:554/streaming/Channels/101"
@@ -25,16 +25,39 @@ cameras:
         - [0.0, 0.0, 1.0]
       t: [0.0, 0.0, 5.0]
 
+  - id: pole_cam_02
+    url: "rtsp://admin:hhjt110110@192.168.1.64:554/streaming/Channels/101"
+    # url: "1080/1080-2.mp4"
+    task: pole                      # pole = 立柱监测（分割模型，1fps 抽帧）
+    # 本摄像头专属标定：内参 K / 畸变 dist / 外参 R,t（OpenCV 约定 Xc = R Xw + t）
+    calibration:
+      K:
+        - [2410.01593, 0.0, 951.17636]
+        - [0.0, 2413.046, 484.50215]
+        - [0.0, 0.0, 1.0]
+      dist: [-0.7744408, 1.191192, 0.008653581, -0.001408523, -1.730219]
+      R:
+        - [1.0, 0.0, 0.0]
+        - [0.0, 1.0, 0.0]
+        - [0.0, 0.0, 1.0]
+      t: [0.0, 0.0, 5.0]
+    # RTSP 实时流（现场部署示例）：
+    #   "rtsp://admin:password@
+
   - id: marker_cam_01
     # RTSP 实时流（现场部署真实地址，已实测沙箱可直连）：
-    url: "rtsp://admin:hhjt110110@192.168.1.64:554/streaming/Channels/101"
+    url: "rtsp://admin:hhjt220220@192.168.1.65:554/streaming/Channels/101"
     # 联调测试用的本地视频文件（改回此行即可恢复离线回放）：
     # url: "babiao/fast_move_shorter.mp4"
     task: marker                    # marker = 靶标跟踪（检测模型，逐帧 + 30s FFT）
     # 注意：marker 在原始（未畸变）像素空间做亚像素定位，mm/px 由靶标外圈圆
     # 直径自标定（见 marker.calibration），不需要相机内参/外参（K/dist/R/t），
     # 也不做去畸变——请勿在此挂 calibration 块，否则只会误导、不被加载。
-
+    
+  - id: marker_cam_02
+    url: "rtsp://admin:hhjt110110@192.168.1.64:554/streaming/Channels/101"
+    # url: "babiao/static_video.mp4"
+    task: marker
 # ---------------------------------------------------------------------
 # 模型（每个分支只加载一份，跨摄像头攒批推理）
 # ---------------------------------------------------------------------
@@ -143,7 +166,7 @@ dashboard:
   # 实时流显示用的子码流通道：dashboard 后端 cv2 直连 RTSP 子码流（显示用），
   # 与 main 走的主码流（101）分离，两进程互不抢带宽。海康约定主码流 101 / 子码流 102；
   # 由相机 URL 末尾的 Channels/N 自动派生为 Channels/102。无 GUI / 服务器部署必开。
-  stream_channel: "102"
+  stream_channel: "101"
   stream_fps: 15                      # 子码流 MJPEG 编码帧率（仅限制推送频率，抓帧仍按源速率）
   reconnect_s: 3.0                   # RTSP 断线后重连间隔（秒）
 
