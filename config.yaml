@@ -25,28 +25,28 @@ cameras:
         - [0.0, 0.0, 1.0]
       t: [0.0, 0.0, 5.0]
 
-  # - id: pole_cam_02
-  #   url: "rtsp://admin:hhjt110110@192.168.1.64:554/streaming/Channels/101"
-  #   # url: "1080/1080-2.mp4"
-  #   task: pole                      # pole = 立柱监测（分割模型，1fps 抽帧）
-  #   # 本摄像头专属标定：内参 K / 畸变 dist / 外参 R,t（OpenCV 约定 Xc = R Xw + t）
-  #   calibration:
-  #     K:
-  #       - [2410.01593, 0.0, 951.17636]
-  #       - [0.0, 2413.046, 484.50215]
-  #       - [0.0, 0.0, 1.0]
-  #     dist: [-0.7744408, 1.191192, 0.008653581, -0.001408523, -1.730219]
-  #     R:
-  #       - [1.0, 0.0, 0.0]
-  #       - [0.0, 1.0, 0.0]
-  #       - [0.0, 0.0, 1.0]
-  #     t: [0.0, 0.0, 5.0]
-  #   # RTSP 实时流（现场部署示例）：
-  #   #   "rtsp://admin:password@
+  - id: pole_cam_02
+    url: "rtsp://admin:hhjt110110@192.168.1.64:554/streaming/Channels/101"
+    # url: "1080/1080-2.mp4"
+    task: pole                      # pole = 立柱监测（分割模型，1fps 抽帧）
+    # 本摄像头专属标定：内参 K / 畸变 dist / 外参 R,t（OpenCV 约定 Xc = R Xw + t）
+    calibration:
+      K:
+        - [2410.01593, 0.0, 951.17636]
+        - [0.0, 2413.046, 484.50215]
+        - [0.0, 0.0, 1.0]
+      dist: [-0.7744408, 1.191192, 0.008653581, -0.001408523, -1.730219]
+      R:
+        - [1.0, 0.0, 0.0]
+        - [0.0, 1.0, 0.0]
+        - [0.0, 0.0, 1.0]
+      t: [0.0, 0.0, 5.0]
+    # RTSP 实时流（现场部署示例）：
+    #   "rtsp://admin:password@
 
   - id: marker_cam_01
     # RTSP 实时流（现场部署真实地址，已实测沙箱可直连）：
-    # url: "rtsp://admin:hhjt220220@192.168.1.65:554/streaming/Channels/101"
+    # url: "rtsp://admin:hhjt110110@192.168.1.65:554/streaming/Channels/101"
     # 联调测试用的本地视频文件（改回此行即可恢复离线回放）：
     url: "babiao/fast_move_shorter.mp4"
     task: marker                    # marker = 靶标跟踪（检测模型，逐帧 + 30s FFT）
@@ -54,10 +54,10 @@ cameras:
     # 直径自标定（见 marker.calibration），不需要相机内参/外参（K/dist/R/t），
     # 也不做去畸变——请勿在此挂 calibration 块，否则只会误导、不被加载。
     
-  # - id: marker_cam_02
-  #   url: "rtsp://admin:hhjt110110@192.168.1.64:554/streaming/Channels/101"
-  #   # url: "babiao/static_video.mp4"
-  #   task: marker
+  - id: marker_cam_02
+    url: "rtsp://admin:hhjt110110@192.168.1.65:554/streaming/Channels/101"
+    # url: "babiao/static_video.mp4"
+    task: marker
 # ---------------------------------------------------------------------
 # 模型（每个分支只加载一份，跨摄像头攒批推理）
 # ---------------------------------------------------------------------

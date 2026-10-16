@@ -84,7 +84,7 @@ def run_spectrum_analyzer(window_s: float, snr_min: float, min_samples: int,
                           placeholder_deflection=0.0,
                           placeholder_cable_force=100.0,
                           realtime_cam_ids=None, clip_q=None,
-                          output_dir="output"):
+                          output_dir="output", file_sources=None):
     """主频分析进程入口。"""
     tag = "spectrum"
     window = float(window_s)
@@ -186,7 +186,39 @@ def run_spectrum_analyzer(window_s: float, snr_min: float, min_samples: int,
                 "source": source,
                 "clip": clip_url,
             }
-            # 实时流：本窗口仅发一次切窗请求（三条件共享片段），文件源不在此处理
+            # 文件源：报警即同步抽取源文件片段（不依赖收尾/周期），与 RTSP 实时切窗对等。
+            # 源文件已在磁盘上，无需"录制"，故报警瞬间即可成片；侧车 json 仍由 retain 周期补。
+            if not is_rt:
+                _src = (file_sources or {}).get(cam_id)
+                if _src:
+                    try:
+                        from pathlib import Path as _P
+                        from viz.clip_retention import (
+                            extract_clip_native, ensure_web_h264)
+                        _cname = f"{t0:.1f}_{result_t1:.1f}_original.mp4"
+                        _out = str(_P(output_dir) / "vibration" / _cname)
+                        _r1 = extract_clip_native(
+                            _src, float(t0), float(result_t1), _out)
+                        if _r1.get("status") == "ok":
+                            analysis["clip_native"] = (
+                                f"/media/output/vibration/{_cname}")
+                            _r2 = ensure_web_h264(
+                                _out, _P(output_dir) / "vibration")
+                            if _r2.get("status") in ("ok", "reuse"):
+                                analysis["clip"] = (
+                                    f"/media/output/vibration/"
+                                    f"{_P(_cname).stem}_h264.mp4")
+                            else:
+                                analysis["clip"] = analysis["clip_native"]
+                            analysis["clip_status"] = (
+                                "ok" if analysis["clip"] else "ok_no_web_copy")
+                        else:
+                            analysis["clip_status"] = "extract_failed"
+                    except Exception as exc:
+                        log(tag, f"文件源振动片段抽取失败 {cam_id}: {exc}")
+                        analysis["clip_status"] = "extract_failed"
+                clip_url = analysis["clip"]  # 同步给下方 event 的 clip 字段
+            # 实时流：本窗口仅发一次切窗请求（三条件共享片段）；文件源已在上方同步抽取
             if is_rt and clip_q is not None:
                 try:
                     from pathlib import Path as _P
@@ -197,34 +229,37 @@ def run_spectrum_analyzer(window_s: float, snr_min: float, min_samples: int,
                     })
                 except Exception as exc:
                     log(tag, f"RTSP 振动片段切窗请求发送失败 {cam_id}: {exc}")
-            if amp_alarm:
+            # 三种振动报警条件共享同一窗口的 analysis 与视频片段：合并为「一条」
+            # vibration_alarm 事件（id 不再带 _defl/_cable 后缀），避免同一(相机,
+            # 目标,窗)被拆成 3 条记录（振幅/挠度/索力全触发时 6 条→2 条，符合
+            # "一次分析→一次上报→每目标最多 1 条"）。triggered 列出实际触发条件，
+            # 看板据其渲染，无需再分 3 行。
+            if any_alarm:
+                triggered = []
+                if amp_alarm:
+                    triggered.append("amplitude")
+                if defl_alarm:
+                    triggered.append("deflection")
+                if cable_alarm:
+                    triggered.append("cable_force")
+                parts = []
+                if amp_alarm:
+                    parts.append(f"振幅 {amp:.2f}mm(阈{amp_threshold:.2f})")
+                if defl_alarm:
+                    parts.append(f"挠度 {placeholder_deflection:.2f}mm占位"
+                                 f"(阈{deflection_threshold:.2f})")
+                if cable_alarm:
+                    parts.append(f"索力 {placeholder_cable_force:.2f}占位"
+                                 f"(阈{cable_force_threshold:.2f})")
+                analysis = dict(analysis)
+                analysis["triggered"] = triggered
                 put_blocking(result_q, {
                     "branch": "marker", "kind": "event", "cam_id": cam_id,
-                    "event": "amplitude_alarm", "id": seg_id,
+                    "event": "vibration_alarm", "id": seg_id,
                     "ts": result_t1, "pid": pid, "level": 1,
-                    "detail": (f"靶标 {pid} 位移幅值 {amp:.2f}mm 超过阈值 "
-                               f"{amp_threshold:.2f}mm"),
+                    "triggered": triggered,
+                    "detail": (f"靶标 {pid} 振动报警（" + "；".join(parts) + "）"),
                     "clip": clip_url,  # 实时流预留 /media/output/vibration/<当前时间>_original.mp4
-                    "analysis": analysis,
-                })
-            if defl_alarm:
-                put_blocking(result_q, {
-                    "branch": "marker", "kind": "event", "cam_id": cam_id,
-                    "event": "deflection_alarm", "id": f"{seg_id}_defl",
-                    "ts": result_t1, "pid": pid, "level": 1,
-                    "detail": (f"靶标 {pid} 挠度 {placeholder_deflection:.2f}mm(占位) "
-                               f"超过阈值 {deflection_threshold:.2f}mm"),
-                    "clip": clip_url,
-                    "analysis": analysis,
-                })
-            if cable_alarm:
-                put_blocking(result_q, {
-                    "branch": "marker", "kind": "event", "cam_id": cam_id,
-                    "event": "cable_force_alarm", "id": f"{seg_id}_cable",
-                    "ts": result_t1, "pid": pid, "level": 1,
-                    "detail": (f"靶标 {pid} 索力 {placeholder_cable_force:.2f}(占位) "
-                               f"超过阈值 {cable_force_threshold:.2f}"),
-                    "clip": clip_url,
                     "analysis": analysis,
                 })
 

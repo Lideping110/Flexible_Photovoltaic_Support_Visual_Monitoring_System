@@ -261,6 +261,15 @@ def run_marker_inference(cfg: dict, cameras: list, frame_queues: dict, result_q,
                 log(tag, f"{cid} 推理完成，已发 camera_done 事件")
             except Exception as exc:
                 log(tag, f"{cid} 完成事件发送失败: {exc}")
+            # 文件源相机已结束，且上一轮 batch 已消费其残留帧 → 安全回收推理会话，
+            # 释放内存/图像引用，资源回归进程共享池供其他实时流/视频文件复用
+            # （进程因 RTSP 长驻不退出，死资源须显式回收）。
+            _sess = sessions.pop(cid, None)
+            if _sess is not None:
+                try:
+                    _sess.finalize_init()
+                except Exception:
+                    pass
 
     # ---- 实时叠加（仅本地 GUI 调试用）----
     # 复用 viz.render._draw_marker，保证与离线标注视频视觉一致（黄框/红十字/
@@ -306,6 +315,8 @@ def run_marker_inference(cfg: dict, cameras: list, frame_queues: dict, result_q,
                     queues = [(cid, q) for cid, q in queues if cid != cam_id]
                     log(tag, f"{cam_id} 下线（剩余 {sorted(online)}）")
                     done_pending.add(cam_id)
+                    # 会话回收不在此处：本批 batch 可能已含该相机残留帧，须先处理完。
+                    # 推迟到 _flush_done 发完 camera_done 后回收（见 _flush_done）。
                     continue
                 if cam_id in online:
                     batch.setdefault(cam_id, []).append(item)

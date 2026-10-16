@@ -925,8 +925,8 @@ def load_alarm_events(output_dir):
             r = json.loads(ln)
         except Exception:
             continue
-        if r.get("event") in ("pole_alarm", "cable_force_alarm", "amplitude_alarm",
-                               "deflection_alarm"):
+        if r.get("event") in ("pole_alarm", "vibration_alarm", "cable_force_alarm",
+                               "amplitude_alarm", "deflection_alarm"):
             events.append(r)
     events.sort(key=lambda e: to_f(e.get("ts")) or 0.0)
     return events
@@ -976,6 +976,7 @@ def build_records(output_dir, pole_cam, marker_cam):
     # 2) events.jsonl 报警事件
     TYPE_MAP = {
         "pole_alarm": "pole",
+        "vibration_alarm": "vibration",
         "cable_force_alarm": "cable",
         "amplitude_alarm": "amplitude",
         "deflection_alarm": "deflection",
@@ -994,7 +995,8 @@ def build_records(output_dir, pole_cam, marker_cam):
         # build_records 优先读侧车，回退事件内嵌分析。
         clip = None
         clip_native = None
-        if ev in ("amplitude_alarm", "deflection_alarm", "cable_force_alarm") and aid:
+        if ev in ("amplitude_alarm", "deflection_alarm", "cable_force_alarm",
+                  "vibration_alarm") and aid:
             js = vib_dir / f"{aid}.json"
             if js.is_file():
                 try:
@@ -1010,6 +1012,7 @@ def build_records(output_dir, pole_cam, marker_cam):
             "type": TYPE_MAP[ev],
             "pid": e.get("pid") or "—",
             "level": e.get("level", 1),
+            "triggered": e.get("triggered"),
             "detail": e.get("detail") or "",
             "snapshot": None,
             "original": None,
@@ -2311,7 +2314,7 @@ RECORDS_HTML_TEMPLATE = r"""<!DOCTYPE html>
   tbody tr:hover { background:#16202e; }
   tbody tr.sel { background:#1c2a1c; }
   .badge { display:inline-block; padding:1px 8px; border-radius:10px; font-size:11px; }
-  .t-pole { background:#3a2230; color:#ff9d96; } .t-cable { background:#2a2340; color:#bc8cff; } .t-amp { background:#23323a; color:#39c5cf; } .t-defl { background:#3a3320; color:#ffd479; }
+  .t-pole { background:#3a2230; color:#ff9d96; } .t-cable { background:#2a2340; color:#bc8cff; } .t-amp { background:#23323a; color:#39c5cf; } .t-defl { background:#3a3320; color:#ffd479; } .t-vib { background:#1f2d3a; color:#7ee787; }
   .lvl { color:#ff7b72; font-weight:600; }
   .empty { color:#5b6776; font-size:14px; padding:40px; text-align:center; background:#111824; border:1px solid #1c2430; border-radius:10px; }
   .detail { margin-top:14px; background:#111824; border:1px solid #1c2430; border-radius:10px; padding:14px; display:none; }
@@ -2337,6 +2340,7 @@ RECORDS_HTML_TEMPLATE = r"""<!DOCTYPE html>
       <button data-f="cable">索力报警</button>
       <button data-f="amplitude">振幅报警</button>
       <button data-f="deflection">挠度报警</button>
+      <button data-f="vibration">振动报警</button>
     </div>
     <span class="count" id="count"></span>
   </div>
@@ -2347,8 +2351,8 @@ RECORDS_HTML_TEMPLATE = r"""<!DOCTYPE html>
 <script>
 let ALL=[], curFilter="all";
 function fmt(v,d=2){ return (v===null||v===undefined)?"—":Number(v).toFixed(d); }
-function typeCls(t){ return t==='pole'?'t-pole':(t==='cable'?'t-cable':(t==='amplitude'?'t-amp':'t-defl')); }
-function typeLabel(t){ return t==='pole'?'立柱超限':(t==='cable'?'索力报警':(t==='amplitude'?'振幅报警':'挠度报警')); }
+function typeCls(t){ return t==='pole'?'t-pole':(t==='cable'?'t-cable':(t==='vibration'?'t-vib':(t==='amplitude'?'t-amp':'t-defl'))); }
+function typeLabel(t){ return t==='pole'?'立柱超限':(t==='cable'?'索力报警':(t==='vibration'?'振动报警':(t==='amplitude'?'振幅报警':'挠度报警'))); }
 
 async function load(){
   document.getElementById("clock").textContent=new Date().toLocaleString();
@@ -2389,9 +2393,13 @@ function showDetail(id){
     // 立柱报警：重新编码帧（画框+拟合直线）与原始帧（无叠加）并列展示
     if(r.snapshot){ h+=`<div style="margin-top:10px;color:#7d8794;font-size:12px">重新编码帧（画框+拟合直线）</div><img src="${r.snapshot}?t=${Date.now()}" alt="重新编码帧">`; }
     if(r.original){ h+=`<div style="margin-top:10px;color:#7d8794;font-size:12px">原始帧（无叠加）</div><img src="${r.original}?t=${Date.now()}" alt="原始帧">`; }
-  } else if(r.type==='amplitude' || r.type==='cable' || r.type==='deflection'){
-    // 振动类报警（振幅/索力/挠度）：同一窗口共享原始视频片段（<video> 原生播）+ 振动分析数据
+  } else if(r.type==='amplitude' || r.type==='cable' || r.type==='deflection' || r.type==='vibration'){
+    // 振动类报警（振幅/索力/挠度，合并为 vibration 后其中之一）：同一窗口共享原始视频片段（<video> 原生播）+ 振动分析数据
     const a=r.analysis||(r.data&&r.data.analysis)||{};
+    // 合并事件：用 triggered 列表展示实际触发了哪些条件（避免拆成多行）
+    if(r.type==='vibration' && r.triggered && r.triggered.length){
+      h+=`<div style="margin-top:8px">触发条件：` + r.triggered.map(t=>`<span class="badge ${t==='amplitude'?'t-amp':(t==='deflection'?'t-defl':'t-cable')}">${t==='amplitude'?'振幅':(t==='deflection'?'挠度':'索力')}</span>`).join(' ') + `</div>`;
+    }
     // r.clip = web 可播副本（{原名}_h264.mp4）；r.clip_native = 原视频文件（保留不删）
     if(r.clip){
       h+=`<div style="margin-top:10px;color:#7d8794;font-size:12px">原始视频片段（报警窗口 · web 转码副本 H.264）</div><video src="${r.clip}" controls preload="metadata" style="max-width:100%;max-height:420px;background:#000;border-radius:6px;display:block"></video>`;

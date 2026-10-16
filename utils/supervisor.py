@@ -31,8 +31,21 @@ def clear_run_outputs(cfg: dict, refresh_init: bool = False) -> None:
         return
     output_dir = Path(cfg["runtime"]["output_dir"])
     vibration_dir = output_dir / "vibration"
+    rtsp_buffer_dir = output_dir / "rtsp_buffer"
     if vibration_dir.exists():
         shutil.rmtree(vibration_dir)
+    if rtsp_buffer_dir.exists():
+        shutil.rmtree(rtsp_buffer_dir)
+    # 全局报警事件日志：跨相机累加，若不随 refresh-init 清除，新一轮运行会在
+    # 看板"报警记录"页把历史报警一并显示，造成"记录越来越多"的假象。清掉重启干净。
+    events_log = output_dir / "events.jsonl"
+    try:
+        events_log.unlink()
+        log("supervisor", f"refresh-init 清除旧结果: {events_log}")
+    except FileNotFoundError:
+        pass
+    except OSError as exc:
+        log("supervisor", f"refresh-init 清除失败 {events_log}: {exc}")
     for cam in cfg.get("cameras", []):
         branch = cam.get("task")
         cid = cam.get("id")
@@ -283,6 +296,17 @@ def run(config_path: str, refresh_init: bool = False) -> int:
     # 实时（RTSP）marker 相机：振动报警时由 capture 滚动缓冲切窗，而非收尾抽源文件
     realtime_marker = {c["id"] for c in marker_cams
                        if is_realtime_source(c.get("url", ""))}
+    # 文件源 marker 相机：源文件绝对路径，供 spectrum 报警时即时抽取片段
+    # （文件源无滚动缓冲，源文件已在磁盘，可报警瞬间成片，不依赖收尾/周期）。
+    _config_dir = cfg.get("_config_dir") or "."
+    def _abs_src(url):
+        p = Path(url)
+        return str(p if p.is_absolute() else Path(_config_dir) / p)
+    file_marker_sources = {
+        c["id"]: _abs_src(c.get("url", ""))
+        for c in marker_cams
+        if not is_realtime_source(c.get("url", ""))
+    }
 
     # ---- 启动进程 ----
     from .capture import run_capture
@@ -332,7 +356,8 @@ def run(config_path: str, refresh_init: bool = False) -> int:
              float(cfg["marker"]["fft"].get("min_span_s", 0.0)),
              _amp_threshold(cfg), _ph_deflection(cfg), _ph_cable_force(cfg),
              _defl_threshold(cfg), _cable_threshold(cfg),
-             realtime_marker, clip_q, str(runtime["output_dir"])))
+             realtime_marker, clip_q, str(runtime["output_dir"]),
+             file_marker_sources))
 
     log("supervisor", f"已启动 {len(procs)} 个进程: "
                       f"{list(procs.keys())}")
@@ -391,6 +416,13 @@ def run(config_path: str, refresh_init: bool = False) -> int:
         log("supervisor", "正常收尾完成")
         return 0
 
+    # 振动报警视频留存周期触发：文件源报警视频需从源文件抽取，原本只在 _finish()
+    # 收尾时抽取；但含 RTSP 长驻相机时 main 永不退出、收尾永不到达，文件源报警视频
+    # 永不生成（output/vibration 不建）。改为周期抽取（_retain_vibration_clips 幂等，
+    # 已抽取窗口跳过），报警后最多 RETAIN_INTERVAL_S 内落盘，RTSP 长驻不再阻塞。
+    retain_interval_s = 15.0
+    last_retain = time.monotonic()
+
     try:
         while True:
             # 僵尸检测：关键进程"异常"退出（exitcode != 0）才整体终止；
@@ -403,6 +435,14 @@ def run(config_path: str, refresh_init: bool = False) -> int:
 
             # 文件源相机推理结束 → 即时导出该路标注视频（无需等 main 整体退出）
             _poll_done_exports(cfg, exported)
+
+            # 振动报警视频周期留存（文件源报警经此从源文件抽片段，RTSP 源补全 json
+            # 侧车与 _h264 副本；_retain_vibration_clips 幂等，已抽取窗口跳过）。
+            # 关键修复：含 RTSP 长驻相机时 main 绝不退出，仅靠收尾抽片段会让文件源
+            # 报警视频永不生成、连 output/vibration 目录都不建。
+            if marker_cams and (time.monotonic() - last_retain) >= retain_interval_s:
+                last_retain = time.monotonic()
+                _retain_vibration_clips(cfg)
 
             # 全部生产者正常结束 → 收尾
             if all(not p.is_alive() for p in workers.values()):

@@ -1,4 +1,4 @@
-"""振动报警留存：为 amplitude_alarm / deflection_alarm / cable_force_alarm 窗口抽取
+"""振动报警留存：为合并后的 vibration_alarm 事件（含触发条件 triggered 列表）窗口抽取
 *原始* 视频片段 + 写入振动分析数据。
 
 两条留存路径（按源类型区分，对齐用户命名规范）：
@@ -14,8 +14,9 @@
   命名与切割均在 capture 侧完成（见 utils/capture.RollingBuffer）。
 
 每个报警窗口最终都写出 ``output/vibration/<id>.json`` 侧车（id 即事件的 id：
-``{cam_id}_{pid}_w{seg}`` / ``..._defl`` / ``..._cable``），内含完整 analysis + clip 路径 + source。同一窗口被多个条件（振幅/挠度/索力）同时触发时，三者共享同一视频片段
-（文件源：同一 ``{t0}_{t1}_original.mp4``；RTSP：同一 ``{当前时间}_original.mp4``）。
+``{cam_id}_{pid}_w{seg}``），内含完整 analysis（含 triggered 列表）+ clip 路径 + source。
+同一窗口被多个条件（振幅/挠度/索力）同时触发时，合并为同一条 vibration_alarm 事件、
+共享同一视频片段（文件源：同一 ``{t0}_{t1}_original.mp4``；RTSP：同一 ``{当前时间}_original.mp4``）。
 大屏 ``build_records`` 直接读该侧车，按 id 关联，不重复造记录。已存在则跳过（幂等）。
 
 **双产物（用户要求：原视频文件不能删，但 web 端要能播）**：
@@ -350,7 +351,7 @@ def _keep_clips_cfg(cfg):
 
 
 def retain_vibration_clips(cfg):
-    """收尾阶段：为 amplitude_alarm / deflection_alarm / cable_force_alarm 窗口
+    """收尾阶段：为 vibration_alarm（合并振幅/挠度/索力触发）窗口
     抽取/引用原始视频片段 + 振动分析数据。
 
     每个报警窗口写出 ``output/vibration/<id>.json`` 侧车（id 即事件 id）：
@@ -382,8 +383,7 @@ def retain_vibration_clips(cfg):
             e = json.loads(ln)
         except Exception:
             continue
-        if e.get("event") not in ("amplitude_alarm", "deflection_alarm",
-                                   "cable_force_alarm"):
+        if e.get("event") != "vibration_alarm":
             continue
         aid = e.get("id")
         if not aid:
