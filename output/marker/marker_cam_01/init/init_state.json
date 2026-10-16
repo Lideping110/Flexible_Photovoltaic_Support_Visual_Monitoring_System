@@ -1,0 +1,26 @@
+{
+  "version": 1,
+  "cam_id": "marker_cam_01",
+  "branch": "marker",
+  "created_at": "2026-10-16T16:42:07+08:00",
+  "init_frame": "init_frame.jpg",
+  "targets": [
+    {
+      "pid": "M1",
+      "box": [
+        1428.375,
+        366.5625,
+        1538.625,
+        488.4375
+      ],
+      "baseline": {
+        "center": [
+          1483.2742919921875,
+          429.96380615234375
+        ],
+        "mm_per_px": 0.7997440760381672
+      },
+      "quality": null
+    }
+  ]
+}

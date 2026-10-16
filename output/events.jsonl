@@ -1,11 +1,10 @@
-{"branch": "pole", "kind": "event", "cam_id": "pole_cam_01", "event": "camera_connected", "ts": 1792130062.3545036, "detail": ""}
-{"branch": "marker", "kind": "event", "cam_id": "marker_cam_01", "event": "camera_connected", "ts": 1792130062.5249093, "detail": ""}
-{"branch": "pole", "kind": "event", "cam_id": "pole_cam_01", "event": "camera_eof", "ts": 1792130063.0523362, "detail": "1080/1080.mp4"}
-{"branch": "marker", "kind": "event", "cam_id": "marker_cam_02", "event": "camera_connected", "ts": 1792130063.5479426, "detail": ""}
-{"branch": "pole", "kind": "event", "cam_id": "pole_cam_02", "event": "camera_connected", "ts": 1792130063.6487737, "detail": ""}
-{"branch": "pole", "kind": "event", "cam_id": "pole_cam_01", "event": "init_created", "ts": 1792130065.5537033, "detail": "首帧锚点 4 个"}
-{"branch": "marker", "kind": "event", "cam_id": "marker_cam_01", "event": "init_created", "ts": 1792130066.7228622, "detail": "首帧锁定靶标 2 个"}
-{"branch": "marker", "kind": "event", "cam_id": "marker_cam_02", "event": "init_created", "ts": 1792130070.4158971, "detail": "首帧锁定靶标 1 个"}
-{"branch": "marker", "kind": "event", "cam_id": "marker_cam_01", "event": "camera_eof", "ts": 1792130108.4421833, "detail": "babiao/fast_move_shorter.mp4"}
-{"branch": "marker", "kind": "event", "cam_id": "marker_cam_01", "event": "vibration_alarm", "id": "marker_cam_01_M2_w0", "ts": 11.84, "pid": "M2", "level": 1, "triggered": ["amplitude"], "detail": "靶标 M2 振动报警（振幅 164.00mm(阈5.00)）", "clip": "/media/output/vibration/0.0_11.8_original_h264.mp4", "analysis": {"window": 0, "t0": 0.0, "t1": 11.84, "frequency_hz": 0.12019230769230758, "frequency_axis": "dy", "amplitude_mm": 164.00315123005896, "amplitude_threshold_mm": 5.0, "deflection_mm": 0.0, "deflection_placeholder": true, "deflection_threshold_mm": 0.0, "cable_force_idx": 0.0, "cable_force_placeholder": true, "cable_force_threshold_idx": 100.0, "source": "file", "clip": "/media/output/vibration/0.0_11.8_original_h264.mp4", "clip_native": "/media/output/vibration/0.0_11.8_original.mp4", "clip_status": "ok", "triggered": ["amplitude"]}}
-{"branch": "marker", "kind": "event", "cam_id": "marker_cam_01", "event": "vibration_alarm", "id": "marker_cam_01_M1_w0", "ts": 11.84, "pid": "M1", "level": 1, "triggered": ["amplitude"], "detail": "靶标 M1 振动报警（振幅 5.56mm(阈5.00)）", "clip": "/media/output/vibration/0.0_11.8_original_h264.mp4", "analysis": {"window": 0, "t0": 0.0, "t1": 11.84, "frequency_hz": 0.08417508417508411, "frequency_axis": "dy", "amplitude_mm": 5.560764404407338, "amplitude_threshold_mm": 5.0, "deflection_mm": 0.0, "deflection_placeholder": true, "deflection_threshold_mm": 0.0, "cable_force_idx": 0.0, "cable_force_placeholder": true, "cable_force_threshold_idx": 100.0, "source": "file", "clip": "/media/output/vibration/0.0_11.8_original_h264.mp4", "clip_native": "/media/output/vibration/0.0_11.8_original.mp4", "clip_status": "ok", "triggered": ["amplitude"]}}
+{"branch": "pole", "kind": "event", "cam_id": "pole_cam_01", "event": "camera_connected", "ts": 1792140032.8687506, "detail": ""}
+{"branch": "pole", "kind": "event", "cam_id": "pole_cam_02", "event": "camera_connected", "ts": 1792140032.9669619, "detail": ""}
+{"branch": "pole", "kind": "event", "cam_id": "pole_cam_01", "event": "camera_eof", "ts": 1792140033.5007179, "detail": "1080/1080.mp4"}
+{"branch": "pole", "kind": "event", "cam_id": "pole_cam_02", "event": "camera_eof", "ts": 1792140033.583209, "detail": "1080/1080-2.mp4"}
+{"branch": "marker", "kind": "event", "cam_id": "marker_cam_01", "event": "camera_connected", "ts": 1792140033.97199, "detail": ""}
+{"branch": "marker", "kind": "event", "cam_id": "marker_cam_02", "event": "camera_connected", "ts": 1792140035.1577547, "detail": ""}
+{"branch": "pole", "kind": "event", "cam_id": "pole_cam_01", "event": "init_created", "ts": 1792140035.8736699, "detail": "首帧锚点 4 个"}
+{"branch": "marker", "kind": "event", "cam_id": "marker_cam_01", "event": "init_created", "ts": 1792140039.5096428, "detail": "首帧锁定靶标 1 个"}
+{"branch": "marker", "kind": "event", "cam_id": "marker_cam_02", "event": "init_created", "ts": 1792140043.741141, "detail": "首帧锁定靶标 1 个"}
+{"branch": "pole", "kind": "event", "cam_id": "pole_cam_02", "event": "init_created", "ts": 1792140045.697076, "detail": "首帧锚点 4 个"}
