@@ -905,6 +905,7 @@ def load_alarm_events(output_dir):
 
     约定事件字段（后续接入真实检测时遵循）：
         event : "pole_alarm" | "cable_force_alarm" | "amplitude_alarm"
+              | "deflection_alarm"
         ts    : 报警触发时的相对时间（秒）
         pid   : 目标/立柱编号
         cam_id: 摄像头编号
@@ -924,7 +925,8 @@ def load_alarm_events(output_dir):
             r = json.loads(ln)
         except Exception:
             continue
-        if r.get("event") in ("pole_alarm", "cable_force_alarm", "amplitude_alarm"):
+        if r.get("event") in ("pole_alarm", "cable_force_alarm", "amplitude_alarm",
+                               "deflection_alarm"):
             events.append(r)
     events.sort(key=lambda e: to_f(e.get("ts")) or 0.0)
     return events
@@ -936,15 +938,17 @@ def build_records(output_dir, pole_cam, marker_cam):
     记录来源：
       1) 立柱超限快照：output/alarms/pole/<ts>.jpg（可选同目录 manifest.jsonl
          提供该时刻的 pid/level/detail/倾角等明细）。文件名即触发时刻 ts。
-      2) events.jsonl 中的报警事件：pole_alarm / cable_force_alarm / amplitude_alarm。
+      2) events.jsonl 中的报警事件：pole_alarm / cable_force_alarm /
+         amplitude_alarm / deflection_alarm。
 
     当前无数据时 records 为空、has_data=False —— 页面如实显示空态，不编造。
     """
     records = []
 
-    # 1) 立柱超限快照
+    # 1) 立柱超限快照：output/alarms/pole/manifest.jsonl 逐条即一次报警留存，
+    #    每条含 snapshot(重新编码帧=画框+拟合直线) / original(原始帧) / source(实时/文件)。
+    #    命名已改为 {当前时间}_ 或 {frame_id}_ 前缀，无法 float 解析，故直接按 manifest 逐条建记录。
     pd = Path(output_dir) / "alarms" / "pole"
-    manifest = {}
     mfile = pd / "manifest.jsonl"
     if mfile.is_file():
         for ln in mfile.read_text(encoding="utf-8").splitlines():
@@ -955,24 +959,18 @@ def build_records(output_dir, pole_cam, marker_cam):
                 r = json.loads(ln)
             except Exception:
                 continue
-            if "ts" in r:
-                manifest[str(r["ts"])] = r
-    if pd.is_dir():
-        for f in sorted(pd.glob("*.jpg"), key=lambda x: x.stem):
-            try:
-                ts = float(f.stem)
-            except Exception:
-                ts = None
-            rec = manifest.get(str(ts), {}) if ts is not None else {}
             records.append({
-                "id": f"pole_{f.stem}",
-                "ts": ts,
+                "id": f"pole_{r.get('cam_id')}_{r.get('ts')}",
+                "ts": to_f(r.get("ts")),
                 "type": "pole",
-                "pid": rec.get("pid") or "—",
-                "level": rec.get("level", 1),
-                "detail": rec.get("detail") or "立柱倾斜角超过阈值",
-                "snapshot": f"/alarms/pole/{f.name}",
-                "data": rec,
+                "pid": r.get("pid") or "—",
+                "level": r.get("level", 1),
+                "detail": r.get("detail") or "立柱倾斜角超过阈值",
+                # snapshot = 重新编码帧（画框+拟合直线）；original = 裸原始帧
+                "snapshot": r.get("snapshot"),
+                "original": r.get("original"),
+                "source": r.get("source"),
+                "data": r,
             })
 
     # 2) events.jsonl 报警事件
@@ -980,20 +978,45 @@ def build_records(output_dir, pole_cam, marker_cam):
         "pole_alarm": "pole",
         "cable_force_alarm": "cable",
         "amplitude_alarm": "amplitude",
+        "deflection_alarm": "deflection",
     }
+    vib_dir = Path(output_dir) / "vibration"
     for e in load_alarm_events(output_dir):
         ev = e.get("event")
         if ev not in TYPE_MAP:
             continue
-        snap = e.get("snapshot")
+        aid = e.get("id")
+        analysis = e.get("analysis")
+        # 振动报警：收尾阶段 supervisor 已为文件源从源文件抽取片段、为 RTSP 实时源
+        # 引用 capture 滚动缓冲切出的片段；两者都把分析数据 + clip 路径写入
+        # output/vibration/<aid>.json 侧车（clip 仅在片段确实落盘时非空）。
+        # clip = web 可播副本（{原名}_h264.mp4）；clip_native = 原视频文件（保留不删）。
+        # build_records 优先读侧车，回退事件内嵌分析。
+        clip = None
+        clip_native = None
+        if ev in ("amplitude_alarm", "deflection_alarm", "cable_force_alarm") and aid:
+            js = vib_dir / f"{aid}.json"
+            if js.is_file():
+                try:
+                    analysis = json.loads(js.read_text(encoding="utf-8"))
+                except Exception:
+                    pass
+            if isinstance(analysis, dict):
+                clip = analysis.get("clip")
+                clip_native = analysis.get("clip_native")
         records.append({
-            "id": e.get("id") or f"{ev}_{e.get('ts')}",
+            "id": aid or f"{ev}_{e.get('ts')}",
             "ts": to_f(e.get("ts")),
             "type": TYPE_MAP[ev],
             "pid": e.get("pid") or "—",
             "level": e.get("level", 1),
             "detail": e.get("detail") or "",
-            "snapshot": snap if snap else None,
+            "snapshot": None,
+            "original": None,
+            "clip": clip,
+            "clip_native": clip_native,
+            "source": (analysis or {}).get("source") if isinstance(analysis, dict) else None,
+            "analysis": analysis,
             "data": e,
         })
 
@@ -2288,7 +2311,7 @@ RECORDS_HTML_TEMPLATE = r"""<!DOCTYPE html>
   tbody tr:hover { background:#16202e; }
   tbody tr.sel { background:#1c2a1c; }
   .badge { display:inline-block; padding:1px 8px; border-radius:10px; font-size:11px; }
-  .t-pole { background:#3a2230; color:#ff9d96; } .t-cable { background:#2a2340; color:#bc8cff; } .t-amp { background:#23323a; color:#39c5cf; }
+  .t-pole { background:#3a2230; color:#ff9d96; } .t-cable { background:#2a2340; color:#bc8cff; } .t-amp { background:#23323a; color:#39c5cf; } .t-defl { background:#3a3320; color:#ffd479; }
   .lvl { color:#ff7b72; font-weight:600; }
   .empty { color:#5b6776; font-size:14px; padding:40px; text-align:center; background:#111824; border:1px solid #1c2430; border-radius:10px; }
   .detail { margin-top:14px; background:#111824; border:1px solid #1c2430; border-radius:10px; padding:14px; display:none; }
@@ -2313,6 +2336,7 @@ RECORDS_HTML_TEMPLATE = r"""<!DOCTYPE html>
       <button data-f="pole">立柱超限</button>
       <button data-f="cable">索力报警</button>
       <button data-f="amplitude">振幅报警</button>
+      <button data-f="deflection">挠度报警</button>
     </div>
     <span class="count" id="count"></span>
   </div>
@@ -2323,8 +2347,8 @@ RECORDS_HTML_TEMPLATE = r"""<!DOCTYPE html>
 <script>
 let ALL=[], curFilter="all";
 function fmt(v,d=2){ return (v===null||v===undefined)?"—":Number(v).toFixed(d); }
-function typeCls(t){ return t==='pole'?'t-pole':(t==='cable'?'t-cable':'t-amp'); }
-function typeLabel(t){ return t==='pole'?'立柱超限':(t==='cable'?'索力报警':'振幅报警'); }
+function typeCls(t){ return t==='pole'?'t-pole':(t==='cable'?'t-cable':(t==='amplitude'?'t-amp':'t-defl')); }
+function typeLabel(t){ return t==='pole'?'立柱超限':(t==='cable'?'索力报警':(t==='amplitude'?'振幅报警':'挠度报警')); }
 
 async function load(){
   document.getElementById("clock").textContent=new Date().toLocaleString();
@@ -2360,16 +2384,39 @@ function showDetail(id){
   h+=`<div>等级</div><div class="lvl">${r.level!=null?r.level:"—"}</div>`;
   h+=`<div>说明</div><div>${r.detail||"—"}</div>`;
   h+='</div>';
-  if(r.snapshot){ h+=`<img src="${r.snapshot}?t=${Date.now()}" alt="报警快照">`; }
-  const skip=new Set(["id","ts","type","type_label","pid","level","detail","snapshot","event"]);
-  const extra=r.data||{};
-  const keys=Object.keys(extra).filter(k=>!skip.has(k));
-  if(keys.length){
+
+  if(r.type==='pole'){
+    // 立柱报警：重新编码帧（画框+拟合直线）与原始帧（无叠加）并列展示
+    if(r.snapshot){ h+=`<div style="margin-top:10px;color:#7d8794;font-size:12px">重新编码帧（画框+拟合直线）</div><img src="${r.snapshot}?t=${Date.now()}" alt="重新编码帧">`; }
+    if(r.original){ h+=`<div style="margin-top:10px;color:#7d8794;font-size:12px">原始帧（无叠加）</div><img src="${r.original}?t=${Date.now()}" alt="原始帧">`; }
+  } else if(r.type==='amplitude' || r.type==='cable' || r.type==='deflection'){
+    // 振动类报警（振幅/索力/挠度）：同一窗口共享原始视频片段（<video> 原生播）+ 振动分析数据
+    const a=r.analysis||(r.data&&r.data.analysis)||{};
+    // r.clip = web 可播副本（{原名}_h264.mp4）；r.clip_native = 原视频文件（保留不删）
+    if(r.clip){
+      h+=`<div style="margin-top:10px;color:#7d8794;font-size:12px">原始视频片段（报警窗口 · web 转码副本 H.264）</div><video src="${r.clip}" controls preload="metadata" style="max-width:100%;max-height:420px;background:#000;border-radius:6px;display:block"></video>`;
+    }
+    else { h+=`<div class="hint">原始视频片段：当前源为实时流（无落地文件）、尚未抽取，或 web 转码副本生成失败（详见"原视频文件"行），仅保留振动分析数据。</div>`; }
+    if(r.clip_native){
+      h+=`<div style="margin-top:8px;color:#7d8794;font-size:12px">原视频文件（保持原始编码 · 浏览器可能无法直接播放，可下载留存）</div>`+
+         `<div><a href="${r.clip_native}" download style="color:#39c5cf;font-size:12px">⬇ 下载 ${r.clip_native.split('/').pop()}</a></div>`;
+    }
     h+='<div class="kv" style="margin-top:10px">';
-    keys.forEach(k=>{ h+=`<div>${k}</div><div>${JSON.stringify(extra[k])}</div>`; });
+    h+=`<div>主频</div><div>${a.frequency_hz!=null?fmt(a.frequency_hz,3)+" Hz":"—"}${a.frequency_axis?(" ("+a.frequency_axis+")"):""}</div>`;
+    h+=`<div>位移幅值</div><div>${a.amplitude_mm!=null?fmt(a.amplitude_mm,3)+" mm":"—"}（阈值 ${a.amplitude_threshold_mm!=null?fmt(a.amplitude_threshold_mm,2):"?"} mm）</div>`;
+    h+=`<div>挠度</div><div>${a.deflection_mm!=null?fmt(a.deflection_mm,2)+" mm":"—"}${a.deflection_placeholder?"（占位）":""}（阈值 ${a.deflection_threshold_mm!=null?fmt(a.deflection_threshold_mm,2):"?"} mm）</div>`;
+    h+=`<div>索力</div><div>${a.cable_force_idx!=null?fmt(a.cable_force_idx,2):"—"}${a.cable_force_placeholder?"（占位）":""}（阈值 ${a.cable_force_threshold_idx!=null?fmt(a.cable_force_threshold_idx,2):"?"}）</div>`;
+    h+=`<div>窗口</div><div>${a.t0!=null?fmt(a.t0,1):"?"} ~ ${a.t1!=null?fmt(a.t1,1):"?"} s（#${a.window!=null?a.window:"?"}）</div>`;
     h+='</div>';
+  } else {
+    // 其它未知类型：回退通用渲染
+    if(r.snapshot){ h+=`<img src="${r.snapshot}?t=${Date.now()}" alt="快照">`; }
+    const skip=new Set(["id","ts","type","type_label","pid","level","detail","snapshot","event","analysis","clip","original"]);
+    const extra=r.data||{};
+    const keys=Object.keys(extra).filter(k=>!skip.has(k));
+    if(keys.length){ h+='<div class="kv" style="margin-top:10px">'; keys.forEach(k=>{ h+=`<div>${k}</div><div>${JSON.stringify(extra[k])}</div>`; }); h+='</div>'; }
   }
-  h+='<div class="hint">点击上方其他记录可切换；立柱超限记录可在此查看对应时刻的快照（历史回放）。</div>';
+  h+='<div class="hint">点击上方其他记录可切换。</div>';
   d.innerHTML=h; d.classList.add("show");
   d.scrollIntoView({behavior:"smooth", block:"nearest"});
 }

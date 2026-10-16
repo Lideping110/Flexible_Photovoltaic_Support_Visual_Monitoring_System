@@ -9,8 +9,8 @@ cameras:
     # RTSP 实时流（现场部署示例）：
       # "rtsp://admin:password@192.168.1.64:554/streaming/Channels/101"
     # 当前为联调测试，使用本地视频文件。
-    # url: "1080/1080.mp4"
-    url: "rtsp://admin:hhjt220220@192.168.1.65:554/streaming/Channels/101"
+    url: "1080/1080.mp4"
+    # url: "rtsp://admin:hhjt110110@192.168.1.64:554/streaming/Channels/101"
     task: pole                      # pole = 立柱监测（分割模型，1fps 抽帧）
     # 本摄像头专属标定：内参 K / 畸变 dist / 外参 R,t（OpenCV 约定 Xc = R Xw + t）
     calibration:
@@ -25,39 +25,39 @@ cameras:
         - [0.0, 0.0, 1.0]
       t: [0.0, 0.0, 5.0]
 
-  - id: pole_cam_02
-    url: "rtsp://admin:hhjt110110@192.168.1.64:554/streaming/Channels/101"
-    # url: "1080/1080-2.mp4"
-    task: pole                      # pole = 立柱监测（分割模型，1fps 抽帧）
-    # 本摄像头专属标定：内参 K / 畸变 dist / 外参 R,t（OpenCV 约定 Xc = R Xw + t）
-    calibration:
-      K:
-        - [2410.01593, 0.0, 951.17636]
-        - [0.0, 2413.046, 484.50215]
-        - [0.0, 0.0, 1.0]
-      dist: [-0.7744408, 1.191192, 0.008653581, -0.001408523, -1.730219]
-      R:
-        - [1.0, 0.0, 0.0]
-        - [0.0, 1.0, 0.0]
-        - [0.0, 0.0, 1.0]
-      t: [0.0, 0.0, 5.0]
-    # RTSP 实时流（现场部署示例）：
-    #   "rtsp://admin:password@
+  # - id: pole_cam_02
+  #   url: "rtsp://admin:hhjt110110@192.168.1.64:554/streaming/Channels/101"
+  #   # url: "1080/1080-2.mp4"
+  #   task: pole                      # pole = 立柱监测（分割模型，1fps 抽帧）
+  #   # 本摄像头专属标定：内参 K / 畸变 dist / 外参 R,t（OpenCV 约定 Xc = R Xw + t）
+  #   calibration:
+  #     K:
+  #       - [2410.01593, 0.0, 951.17636]
+  #       - [0.0, 2413.046, 484.50215]
+  #       - [0.0, 0.0, 1.0]
+  #     dist: [-0.7744408, 1.191192, 0.008653581, -0.001408523, -1.730219]
+  #     R:
+  #       - [1.0, 0.0, 0.0]
+  #       - [0.0, 1.0, 0.0]
+  #       - [0.0, 0.0, 1.0]
+  #     t: [0.0, 0.0, 5.0]
+  #   # RTSP 实时流（现场部署示例）：
+  #   #   "rtsp://admin:password@
 
   - id: marker_cam_01
     # RTSP 实时流（现场部署真实地址，已实测沙箱可直连）：
-    url: "rtsp://admin:hhjt220220@192.168.1.65:554/streaming/Channels/101"
+    # url: "rtsp://admin:hhjt220220@192.168.1.65:554/streaming/Channels/101"
     # 联调测试用的本地视频文件（改回此行即可恢复离线回放）：
-    # url: "babiao/fast_move_shorter.mp4"
+    url: "babiao/fast_move_shorter.mp4"
     task: marker                    # marker = 靶标跟踪（检测模型，逐帧 + 30s FFT）
     # 注意：marker 在原始（未畸变）像素空间做亚像素定位，mm/px 由靶标外圈圆
     # 直径自标定（见 marker.calibration），不需要相机内参/外参（K/dist/R/t），
     # 也不做去畸变——请勿在此挂 calibration 块，否则只会误导、不被加载。
     
-  - id: marker_cam_02
-    url: "rtsp://admin:hhjt110110@192.168.1.64:554/streaming/Channels/101"
-    # url: "babiao/static_video.mp4"
-    task: marker
+  # - id: marker_cam_02
+  #   url: "rtsp://admin:hhjt110110@192.168.1.64:554/streaming/Channels/101"
+  #   # url: "babiao/static_video.mp4"
+  #   task: marker
 # ---------------------------------------------------------------------
 # 模型（每个分支只加载一份，跨摄像头攒批推理）
 # ---------------------------------------------------------------------
@@ -118,6 +118,8 @@ pole:
     left_right_deg: 2.0
     front_back_deg: 2.0
     total_deg: 2.5
+    # 立柱报警留存节流：同一根立柱两次落盘快照的最小间隔（秒），避免持续报警时每秒一张刷屏
+    cooldown_s: 5.0
 
 # ---------------------------------------------------------------------
 # 靶标跟踪分支参数（字段沿用原 marker_subpixel_tracker/config/config.yaml）
@@ -138,6 +140,23 @@ marker:
     real_diameter_mm: 100.0         # 靶标外圈圆真实直径
     frames: 8                       # 自动标定采集帧数上限
     min_frames: 1                   # 达到即可提前完成标定
+  # 振动报警：以下三类阈值，沿用振幅约定——>0 启用，<=0 关闭。
+  # 任一类触发都会在该窗口留存报警数据（事件 + 振动分析 + 视频片段），片段共享。
+  #  - amplitude_mm    ：位移幅值（mm）真实量，超过阈值触发 amplitude_alarm；
+  #  - deflection_mm   ：挠度阈值（mm），与下方 placeholder.deflection_mm（占位值）比较；
+  #                      当前占位为 0.0，真实模型就绪前该条件在标准配置下不会触发。
+  #  - cable_force_idx ：索力阈值（相对量纲），与 placeholder.cable_force_idx（占位值）
+  #                      比较；占位默认 100，设例如 80 即可在占位值下演示触发。
+  # 注意：挠度/索力均取自下方 placeholder（物理模型未定），报警分析数据里会显式标注「占位」。
+  alarm:
+    amplitude_mm: 5.0
+    deflection_mm: 0.0
+    cable_force_idx: 0.0
+    # 报警视频片段保留上限：只保留最近 N 个报警窗口，超出的整组删除
+    #（{原名}_original.mp4 + _h264.mp4 + 引用它们的侧车 json，避免磁盘无限增长）。
+    # 同一窗口被振幅/挠度/索力多条件同时触发时共享片段，按窗口整组同进同出。
+    # 配成 0 / -1 / all / inf 等 = 保留全部（不删除）。默认 10。
+    keep_clips: 10
   localization:
     structure_sigma: 1.5
     min_lambda_min: 5000.0
@@ -183,6 +202,8 @@ runtime:
     mode: threads                   # threads | processes（解码 CPU 吃紧时切换）
     reconnect_s: 5                  # RTSP 断线重连间隔（秒）
     rtsp_low_latency: true          # TCP + nobuffer 低延迟拉流
+    rtsp_rolling_s: 120             # RTSP 实时流滚动缓冲时长（秒）：振动报警时由 capture 从中切窗
+    rtsp_seg_s: 10                  # 滚动缓冲分段时长（秒/段），落盘 output/rtsp_buffer/<cam_id>/
 
   batch:
     pole:

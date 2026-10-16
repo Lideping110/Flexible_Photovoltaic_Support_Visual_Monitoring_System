@@ -1,52 +1,67 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 680 560" width="680" height="560" role="img">
-<title>持久 ID 匹配层：遮挡换轨的几何先验纠正</title>
-<desc>ByteTrack 原始 ID 仅作临时身份，持久 ID 由锚点匹配层分配：新轨迹与 init 锚点做 IoU 加中心距匹配，被遮挡立柱重新出现时即使原始 ID 变为 9，也能纠正回持久 ID 2</desc>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 760 620" width="760" height="620" role="img" font-family="sans-serif">
+<title>持久 ID 匹配层：遮挡换轨的几何先验纠正（含配置项）</title>
+<desc>ByteTrack 原始 ID 仅作临时身份，持久 ID 由锚点匹配层分配：新轨迹与 init 锚点做 IoU 加中心距匹配，被遮挡立柱重新出现时即使原始 ID 变为 9，也能纠正回持久 ID 2。配置项：pole iou_min=0.3/release_after_s=10/ema_alpha=0.05；marker relock_max_px=200。</desc>
 <defs>
-<marker id="arrow" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+<marker id="ar" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
 <path d="M2 1L8 5L2 9" fill="none" stroke="context-stroke" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
 </marker>
 </defs>
-<rect x="0" y="0" width="680" height="560" fill="#2B2B28"/>
-<text x="40" y="42" dominant-baseline="central" font-size="15" font-weight="500" fill="#D3D1C7" font-family="sans-serif">持久 ID 匹配层 · 以 cam1 立柱为例</text>
-<rect x="40" y="64" width="600" height="72" rx="8" fill="#085041" stroke="#5DCAA5" stroke-width="0.5"/>
-<text x="56" y="86" dominant-baseline="central" font-size="12" font-weight="500" fill="#9FE1CB" font-family="sans-serif">初始帧（持久化于 init_state.json）</text>
-<text x="56" y="106" dominant-baseline="central" font-size="11" fill="#5DCAA5" font-family="sans-serif">P1 box[100,60,160,420] · P2 box[300,60,360,420] · P3 box[520,60,580,420] · P4 box[740,60,800,420]</text>
-<text x="56" y="124" dominant-baseline="central" font-size="11" fill="#5DCAA5" font-family="sans-serif">每个锚点绑定：持久 ID · 检测框 · 初始角度/中心线 · 质量分（EMA 缓慢跟随更新）</text>
-<text x="40" y="166" dominant-baseline="central" font-size="12" font-weight="500" fill="#D3D1C7" font-family="sans-serif">时间线（ByteTrack 原始 ID → 匹配层 → 输出持久 ID）</text>
-<rect x="40" y="182" width="130" height="72" rx="8" fill="#444441" stroke="#888780" stroke-width="0.5"/>
-<text x="105" y="202" text-anchor="middle" dominant-baseline="central" font-size="12" font-weight="500" fill="#D3D1C7" font-family="sans-serif">正常运行</text>
-<text x="105" y="222" text-anchor="middle" dominant-baseline="central" font-size="11" fill="#B4B2A9" font-family="sans-serif">raw id 1 2 3 4</text>
-<text x="105" y="240" text-anchor="middle" dominant-baseline="central" font-size="11" fill="#9FE1CB" font-family="sans-serif">输出 P1 P2 P3 P4</text>
-<path d="M170 218 H190" fill="none" stroke="#888780" stroke-width="1.5" marker-end="url(#arrow)"/>
-<rect x="192" y="182" width="130" height="72" rx="8" fill="#712B13" stroke="#D85A30" stroke-width="0.5"/>
-<text x="257" y="202" text-anchor="middle" dominant-baseline="central" font-size="12" font-weight="500" fill="#F0997B" font-family="sans-serif">P2 被遮挡</text>
-<text x="257" y="222" text-anchor="middle" dominant-baseline="central" font-size="11" fill="#D85A30" font-family="sans-serif">raw id 2 消失</text>
-<text x="257" y="240" text-anchor="middle" dominant-baseline="central" font-size="11" fill="#B4B2A9" font-family="sans-serif">输出 P1 P3 P4</text>
-<path d="M322 218 H342" fill="none" stroke="#888780" stroke-width="1.5" marker-end="url(#arrow)"/>
-<rect x="344" y="182" width="130" height="72" rx="8" fill="#633806" stroke="#EF9F27" stroke-width="0.5"/>
-<text x="409" y="202" text-anchor="middle" dominant-baseline="central" font-size="12" font-weight="500" fill="#FAC775" font-family="sans-serif">P2 再出现</text>
-<text x="409" y="222" text-anchor="middle" dominant-baseline="central" font-size="11" fill="#EF9F27" font-family="sans-serif">ByteTrack 给 raw id 9</text>
-<text x="409" y="240" text-anchor="middle" dominant-baseline="central" font-size="11" fill="#B4B2A9" font-family="sans-serif">输出 P1 P3 P4 + ?</text>
-<path d="M474 218 H494" fill="none" stroke="#888780" stroke-width="1.5" marker-end="url(#arrow)"/>
-<rect x="496" y="182" width="144" height="72" rx="8" fill="#085041" stroke="#5DCAA5" stroke-width="0.5"/>
-<text x="568" y="202" text-anchor="middle" dominant-baseline="central" font-size="12" font-weight="500" fill="#9FE1CB" font-family="sans-serif">匹配层纠正</text>
-<text x="568" y="222" text-anchor="middle" dominant-baseline="central" font-size="11" fill="#5DCAA5" font-family="sans-serif">id9 框 ↔ 锚点 P2</text>
-<text x="568" y="240" text-anchor="middle" dominant-baseline="central" font-size="11" fill="#9FE1CB" font-family="sans-serif">输出 P1 P2 P3 P4</text>
-<text x="40" y="288" dominant-baseline="central" font-size="12" font-weight="500" fill="#D3D1C7" font-family="sans-serif">匹配层工作规则（匈牙利算法 · 每帧增量执行）</text>
-<rect x="40" y="304" width="292" height="88" rx="8" fill="#444441" stroke="#888780" stroke-width="0.5"/>
-<text x="56" y="326" dominant-baseline="central" font-size="12" font-weight="500" fill="#D3D1C7" font-family="sans-serif">代价 = 1 − IoU（主）</text>
-<text x="56" y="346" dominant-baseline="central" font-size="11" fill="#B4B2A9" font-family="sans-serif">新轨迹框 vs 各空置锚点框，全局最优指派</text>
-<text x="56" y="366" dominant-baseline="central" font-size="11" fill="#B4B2A9" font-family="sans-serif">IoU ≥ 0.3 才接受；立柱细长框 IoU 天然可靠</text>
-<text x="56" y="384" dominant-baseline="central" font-size="11" fill="#B4B2A9" font-family="sans-serif">兜底：中心距 ≤ 锚点框短边（应对变焦/位移）</text>
-<rect x="348" y="304" width="292" height="88" rx="8" fill="#444441" stroke="#888780" stroke-width="0.5"/>
-<text x="364" y="326" dominant-baseline="central" font-size="12" font-weight="500" fill="#D3D1C7" font-family="sans-serif">锚点所有权 · 单写者</text>
-<text x="364" y="346" dominant-baseline="central" font-size="11" fill="#B4B2A9" font-family="sans-serif">锚点被活跃轨迹占用时，新轨迹不许抢</text>
-<text x="364" y="366" dominant-baseline="central" font-size="11" fill="#B4B2A9" font-family="sans-serif">占用轨迹需连续丢失 K 秒（默认 10s）才释放</text>
-<text x="364" y="384" dominant-baseline="central" font-size="11" fill="#B4B2A9" font-family="sans-serif">匹配成功后锚点框 EMA 跟随（缓慢形变免疫）</text>
-<rect x="40" y="404" width="600" height="64" rx="8" fill="#444441" stroke="#888780" stroke-width="0.5"/>
-<text x="56" y="426" dominant-baseline="central" font-size="12" font-weight="500" fill="#D3D1C7" font-family="sans-serif">对测量层的意义</text>
-<text x="56" y="446" dominant-baseline="central" font-size="11" fill="#B4B2A9" font-family="sans-serif">基准/EMA/报警状态以持久 ID 为键 → 换轨不重置基准、不丢历史；现有 monitor 的 baseline 字典直接换键即用</text>
-<rect x="40" y="480" width="600" height="56" rx="8" fill="#0C447C" stroke="#85B7EB" stroke-width="0.5"/>
-<text x="56" y="500" dominant-baseline="central" font-size="12" font-weight="500" fill="#B5D4F4" font-family="sans-serif">靶标分支（持续跟踪，非框匹配）</text>
-<text x="56" y="520" dominant-baseline="central" font-size="11" fill="#85B7EB" font-family="sans-serif">靶标晃动，身份靠 ByteTrack raw id 持续跟踪；丢失重发用最近位置重锁；初始框仅存档，不参与匹配</text>
+<rect x="0" y="0" width="760" height="620" fill="#2B2B28"/>
+<rect x="0" y="0" width="760" height="4" fill="#5DCAA5"/>
+<text x="40" y="34" dominant-baseline="central" font-size="15" font-weight="600" fill="#D3D1C7">持久 ID 匹配层 · 以 cam1 立柱为例</text>
+
+<!-- config strip -->
+<rect x="40" y="54" width="680" height="46" rx="8" fill="#0C447C" stroke="#85B7EB" stroke-width="0.5"/>
+<text x="56" y="73" dominant-baseline="central" font-size="11.5" font-weight="500" fill="#B5D4F4">runtime.init.anchor 配置项</text>
+<text x="56" y="91" dominant-baseline="central" font-size="10.5" fill="#85B7EB">pole：iou_min=0.3 · release_after_s=10.0 · ema_alpha=0.05　｜　marker：relock_max_px=200.0</text>
+
+<rect x="40" y="116" width="680" height="62" rx="8" fill="#085041" stroke="#5DCAA5" stroke-width="0.5"/>
+<text x="56" y="136" dominant-baseline="central" font-size="12" font-weight="500" fill="#9FE1CB">初始帧（持久化于 init_state.json）</text>
+<text x="56" y="156" dominant-baseline="central" font-size="10.5" fill="#5DCAA5">P1 box[100,60,160,420] · P2 box[300,60,360,420] · P3 box[520,60,580,420] · P4 box[740,60,800,420]</text>
+<text x="56" y="172" dominant-baseline="central" font-size="10.5" fill="#5DCAA5">每个锚点绑定：持久 ID · 检测框 · 初始角度/中心线 · 质量分（EMA 缓慢跟随，ema_alpha=0.05）</text>
+
+<text x="40" y="200" dominant-baseline="central" font-size="12" font-weight="500" fill="#D3D1C7">时间线（ByteTrack 原始 ID → 匹配层 → 输出持久 ID）</text>
+<rect x="40" y="214" width="140" height="70" rx="8" fill="#444441" stroke="#888780" stroke-width="0.5"/>
+<text x="110" y="232" text-anchor="middle" dominant-baseline="central" font-size="12" font-weight="500" fill="#D3D1C7">正常运行</text>
+<text x="110" y="252" text-anchor="middle" dominant-baseline="central" font-size="10.5" fill="#B4B2A9">raw id 1 2 3 4</text>
+<text x="110" y="270" text-anchor="middle" dominant-baseline="central" font-size="10.5" fill="#9FE1CB">输出 P1 P2 P3 P4</text>
+<path d="M180 249 H198" fill="none" stroke="#888780" stroke-width="1.5" marker-end="url(#ar)"/>
+<rect x="200" y="214" width="140" height="70" rx="8" fill="#712B13" stroke="#D85A30" stroke-width="0.5"/>
+<text x="270" y="232" text-anchor="middle" dominant-baseline="central" font-size="12" font-weight="500" fill="#F0997B">P2 被遮挡</text>
+<text x="270" y="252" text-anchor="middle" dominant-baseline="central" font-size="10.5" fill="#D85A30">raw id 2 消失</text>
+<text x="270" y="270" text-anchor="middle" dominant-baseline="central" font-size="10.5" fill="#B4B2A9">输出 P1 P3 P4</text>
+<path d="M340 249 H358" fill="none" stroke="#888780" stroke-width="1.5" marker-end="url(#ar)"/>
+<rect x="360" y="214" width="140" height="70" rx="8" fill="#633806" stroke="#EF9F27" stroke-width="0.5"/>
+<text x="430" y="232" text-anchor="middle" dominant-baseline="central" font-size="12" font-weight="500" fill="#FAC775">P2 再出现</text>
+<text x="430" y="252" text-anchor="middle" dominant-baseline="central" font-size="10.5" fill="#EF9F27">ByteTrack 给 raw id 9</text>
+<text x="430" y="270" text-anchor="middle" dominant-baseline="central" font-size="10.5" fill="#B4B2A9">输出 P1 P3 P4 + ?</text>
+<path d="M500 249 H518" fill="none" stroke="#888780" stroke-width="1.5" marker-end="url(#ar)"/>
+<rect x="520" y="214" width="160" height="70" rx="8" fill="#085041" stroke="#5DCAA5" stroke-width="0.5"/>
+<text x="600" y="232" text-anchor="middle" dominant-baseline="central" font-size="12" font-weight="500" fill="#9FE1CB">匹配层纠正</text>
+<text x="600" y="252" text-anchor="middle" dominant-baseline="central" font-size="10.5" fill="#5DCAA5">id9 框 ↔ 锚点 P2（IoU≥0.3）</text>
+<text x="600" y="270" text-anchor="middle" dominant-baseline="central" font-size="10.5" fill="#9FE1CB">输出 P1 P2 P3 P4</text>
+
+<text x="40" y="312" dominant-baseline="central" font-size="12" font-weight="500" fill="#D3D1C7">匹配层工作规则（匈牙利算法 · 每帧增量执行）</text>
+<rect x="40" y="326" width="340" height="92" rx="8" fill="#444441" stroke="#888780" stroke-width="0.5"/>
+<text x="56" y="348" dominant-baseline="central" font-size="12" font-weight="500" fill="#D3D1C7">代价 = 1 − IoU（主）</text>
+<text x="56" y="368" dominant-baseline="central" font-size="10.5" fill="#B4B2A9">新轨迹框 vs 各空置锚点框，全局最优指派</text>
+<text x="56" y="388" dominant-baseline="central" font-size="10.5" fill="#B4B2A9">IoU ≥ iou_min(0.3) 才接受；立柱细长框 IoU 天然可靠</text>
+<text x="56" y="408" dominant-baseline="central" font-size="10.5" fill="#B4B2A9">兜底：中心距 ≤ 锚点框短边（应对变焦/位移）</text>
+<rect x="392" y="326" width="328" height="92" rx="8" fill="#444441" stroke="#888780" stroke-width="0.5"/>
+<text x="408" y="348" dominant-baseline="central" font-size="12" font-weight="500" fill="#D3D1C7">锚点所有权 · 单写者</text>
+<text x="408" y="368" dominant-baseline="central" font-size="10.5" fill="#B4B2A9">锚点被活跃轨迹占用时，新轨迹不许抢</text>
+<text x="408" y="388" dominant-baseline="central" font-size="10.5" fill="#B4B2A9">占用轨迹需连续丢失 release_after_s(10s) 才释放</text>
+<text x="408" y="408" dominant-baseline="central" font-size="10.5" fill="#B4B2A9">匹配成功后锚点框 EMA 跟随（ema_alpha=0.05）</text>
+
+<rect x="40" y="430" width="680" height="64" rx="8" fill="#444441" stroke="#888780" stroke-width="0.5"/>
+<text x="56" y="452" dominant-baseline="central" font-size="12" font-weight="500" fill="#D3D1C7">对测量层的意义</text>
+<text x="56" y="472" dominant-baseline="central" font-size="10.5" fill="#B4B2A9">基准/EMA/报警状态以持久 ID 为键 → 换轨不重置基准、不丢历史；现有 monitor 的 baseline 字典直接换键即用</text>
+
+<rect x="40" y="504" width="680" height="96" rx="8" fill="#0C447C" stroke="#85B7EB" stroke-width="0.5"/>
+<text x="56" y="526" dominant-baseline="central" font-size="12" font-weight="500" fill="#B5D4F4">靶标分支（持续跟踪，非框匹配 · MarkerTrackRegistry）</text>
+<text x="56" y="546" dominant-baseline="central" font-size="10.5" fill="#85B7EB">靶标晃动，身份靠 ByteTrack raw id 持续跟踪；丢失重发用最近位置重锁</text>
+<text x="56" y="566" dominant-baseline="central" font-size="10.5" fill="#85B7EB">relock_max_px=200：未认领新检测框中心距某失主 last_box 超过此值(px)不抢身份，避免 N≥4 多目标张冠李戴</text>
+<text x="56" y="586" dominant-baseline="central" font-size="10.5" fill="#85B7EB">初始框仅存档，不参与匹配</text>
+
+<text x="380" y="612" text-anchor="middle" dominant-baseline="central" font-size="10" fill="#7E7C75">持久 ID 是 基准 / EMA / 报警留存 的稳定键 —— 遮挡换轨不重置基准、不丢历史；报警事件按 pid 关联（与 ⑥ 报警逻辑架构一致）</text>
 </svg>

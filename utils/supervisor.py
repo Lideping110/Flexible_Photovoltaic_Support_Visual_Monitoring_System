@@ -13,6 +13,7 @@
 """
 import multiprocessing as mp
 import time
+import shutil
 from pathlib import Path
 
 from .common import SENTINEL, is_realtime_source, log
@@ -29,6 +30,9 @@ def clear_run_outputs(cfg: dict, refresh_init: bool = False) -> None:
     if not refresh_init:
         return
     output_dir = Path(cfg["runtime"]["output_dir"])
+    vibration_dir = output_dir / "vibration"
+    if vibration_dir.exists():
+        shutil.rmtree(vibration_dir)
     for cam in cfg.get("cameras", []):
         branch = cam.get("task")
         cid = cam.get("id")
@@ -46,6 +50,7 @@ def clear_run_outputs(cfg: dict, refresh_init: bool = False) -> None:
             cam_dir / "init" / "init_state.json",
             cam_dir / "init" / "init_frame.jpg",
         ]
+        
         for path in targets:
             try:
                 path.unlink()
@@ -54,6 +59,77 @@ def clear_run_outputs(cfg: dict, refresh_init: bool = False) -> None:
                 pass
             except OSError as exc:
                 log("supervisor", f"refresh-init 清除失败 {path}: {exc}")
+
+
+def _amp_threshold(cfg):
+    """振动报警的位移幅值阈值（mm）；<=0 表示关闭振幅报警。"""
+    try:
+        return float((cfg.get("marker", {}) or {}).get("alarm", {})
+                     .get("amplitude_mm", 0.0))
+    except Exception:
+        return 0.0
+
+
+def _ph_deflection(cfg):
+    try:
+        return float((cfg.get("marker", {}) or {}).get("placeholder", {})
+                     .get("deflection_mm", 0.0))
+    except Exception:
+        return 0.0
+
+
+def _ph_cable_force(cfg):
+    try:
+        return float((cfg.get("marker", {}) or {}).get("placeholder", {})
+                     .get("cable_force_idx", 100.0))
+    except Exception:
+        return 100.0
+
+
+def _defl_threshold(cfg):
+    """振动报警的挠度阈值（mm）；<=0 表示关闭挠度报警。
+
+    与振幅报警一致沿用 >0 启用约定。当前挠度取自 marker.placeholder（占位值，
+    物理模型未定），阈值比较作用于该占位值；真实模型就绪后该占位值被真实量替换，
+    报警逻辑无需改动。
+    """
+    try:
+        return float((cfg.get("marker", {}) or {}).get("alarm", {})
+                     .get("deflection_mm", 0.0))
+    except Exception:
+        return 0.0
+
+
+def _cable_threshold(cfg):
+    """振动报警的索力阈值（相对量纲，与占位值 cable_force_idx 同量纲）；<=0 表示关闭。
+
+    索力占位值默认 100（首帧基准），设例如 80 即可在占位值下触发报警；真实模型
+    就绪后由真实索力替换占位值，比较逻辑不变。
+    """
+    try:
+        return float((cfg.get("marker", {}) or {}).get("alarm", {})
+                     .get("cable_force_idx", 0.0))
+    except Exception:
+        return 0.0
+
+
+def _retain_vibration_clips(cfg):
+    """收尾：为 amplitude_alarm 窗口抽取原始视频片段 + 振动分析数据。
+
+    详见 viz.clip_retention.retain_vibration_clips。RTSP 实时源无落地文件，跳过片段
+    抽取（已知缺口：main 不录制 RTSP）；分析数据仍随 events.jsonl 保留。
+    """
+    try:
+        from viz.clip_retention import retain_vibration_clips as _rvc
+    except Exception as exc:
+        log("supervisor", f"振动留存模块不可用: {exc}")
+        return
+    try:
+        produced = _rvc(cfg)
+        if produced:
+            log("supervisor", f"振动留存完成，共 {len(produced)} 个窗口片段/分析")
+    except Exception as exc:
+        log("supervisor", f"振动留存异常: {exc}")
 
 
 def _export_annotated_videos(cfg):
@@ -190,6 +266,9 @@ def run(config_path: str, refresh_init: bool = False) -> int:
     queue_cfg = runtime["queue"]
     result_q = mp.Queue(int(queue_cfg["result"]))
     spectrum_q = mp.Queue(int(queue_cfg["spectrum"])) if marker_cams else None
+    # 振动报警切窗请求队列：spectrum 进程写入、capture 进程（仅实时 marker 相机）
+    # 消费，从滚动缓冲切出 {当前时间}_original.mp4。无 marker 实时源时为 None。
+    clip_q = mp.Queue(512) if marker_cams else None
     stop_event = mp.Event()
 
     # 每个摄像头一条有界帧队列
@@ -201,6 +280,9 @@ def run(config_path: str, refresh_init: bool = False) -> int:
 
     pole_queues = {c["id"]: frame_queues[c["id"]] for c in pole_cams}
     marker_queues = {c["id"]: frame_queues[c["id"]] for c in marker_cams}
+    # 实时（RTSP）marker 相机：振动报警时由 capture 滚动缓冲切窗，而非收尾抽源文件
+    realtime_marker = {c["id"] for c in marker_cams
+                       if is_realtime_source(c.get("url", ""))}
 
     # ---- 启动进程 ----
     from .capture import run_capture
@@ -233,7 +315,10 @@ def run(config_path: str, refresh_init: bool = False) -> int:
         procs["marker_capture"] = _spawn(
             "marker_capture", run_capture,
             ("marker", marker_cams, marker_queues, result_q, stop_event,
-             runtime["capture"], None, marker_ready))
+             runtime["capture"], None, marker_ready, clip_q,
+             str(runtime["output_dir"]),
+             float(runtime["capture"].get("rtsp_rolling_s", 120.0)),
+             float(runtime["capture"].get("rtsp_seg_s", 10.0))))
         procs["marker_inference"] = _spawn(
             "marker_inference", run_marker_inference,
             (cfg, marker_cams, marker_queues, result_q, spectrum_q,
@@ -244,7 +329,10 @@ def run(config_path: str, refresh_init: bool = False) -> int:
              float(cfg["marker"]["fft"]["snr"]),
              int(cfg["marker"]["fft"]["min_samples"]),
              spectrum_q, result_q, stop_event,
-             float(cfg["marker"]["fft"].get("min_span_s", 0.0))))
+             float(cfg["marker"]["fft"].get("min_span_s", 0.0)),
+             _amp_threshold(cfg), _ph_deflection(cfg), _ph_cable_force(cfg),
+             _defl_threshold(cfg), _cable_threshold(cfg),
+             realtime_marker, clip_q, str(runtime["output_dir"])))
 
     log("supervisor", f"已启动 {len(procs)} 个进程: "
                       f"{list(procs.keys())}")
@@ -297,6 +385,9 @@ def run(config_path: str, refresh_init: bool = False) -> int:
             r.join(timeout=5)
         # 收尾后自动生成每相机标注视频（file 源）到各自相机文件夹下
         _export_annotated_videos(cfg)
+        # 振动报警留存：文件源相机抽取原始片段 + 振动分析数据（在标注视频之后，
+        # 此时 events.jsonl 已由 Recorder 全部 flush 完毕）
+        _retain_vibration_clips(cfg)
         log("supervisor", "正常收尾完成")
         return 0
 

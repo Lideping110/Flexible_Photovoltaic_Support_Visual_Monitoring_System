@@ -1,33 +1,69 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 680 560" width="680" height="560" role="img">
-<title>config.yaml 单一配置文件结构</title>
-<desc>配置文件包含 cameras 摄像头清单（每摄像头含 id、url、task 角色与内联标定 K/dist/R/t）、models 模型、pole 与 marker 分支参数、runtime 运行参数五个顶层段；一条命令 uv run python main.py 启动全部。</desc>
-<rect x="0" y="0" width="680" height="560" fill="#2B2B28"/>
-<text x="40" y="44" dominant-baseline="central" font-size="15" font-weight="500" fill="#D3D1C7" font-family="sans-serif">config.yaml — 唯一配置文件</text>
-<text x="40" y="66" dominant-baseline="central" font-size="12" fill="#888780" font-family="sans-serif">一条命令：uv run python main.py --config config.yaml</text>
-<path d="M26 90 V538" fill="none" stroke="#5F5E5A" stroke-width="1" stroke-dasharray="3 3"/>
-<circle cx="26" cy="146" r="3" fill="#AFA9EC"/>
-<circle cx="26" cy="254" r="3" fill="#B4B2A9"/>
-<circle cx="26" cy="342" r="3" fill="#5DCAA5"/>
-<circle cx="26" cy="430" r="3" fill="#EF9F27"/>
-<circle cx="26" cy="510" r="3" fill="#85B7EB"/>
-<rect x="40" y="90" width="600" height="112" rx="10" fill="#3C3489" stroke="#AFA9EC" stroke-width="0.5"/>
-<text x="56" y="112" dominant-baseline="central" font-size="13" font-weight="500" fill="#CECBF6" font-family="sans-serif">cameras:  摄像头清单（id · url · task — 谁干什么在此指定）</text>
-<rect x="56" y="126" width="278" height="62" rx="8" fill="#26215C" stroke="#7F77DD" stroke-width="0.5"/>
-<text x="195" y="146" text-anchor="middle" dominant-baseline="central" font-size="12" fill="#CECBF6" font-family="sans-serif">cam_01 · rtsp://192.168.1.64/…</text>
-<text x="195" y="166" text-anchor="middle" dominant-baseline="central" font-size="11" fill="#AFA9EC" font-family="sans-serif">task: pole · 独立 K / dist / R / t</text>
-<rect x="346" y="126" width="278" height="62" rx="8" fill="#26215C" stroke="#7F77DD" stroke-width="0.5"/>
-<text x="485" y="146" text-anchor="middle" dominant-baseline="central" font-size="12" fill="#CECBF6" font-family="sans-serif">cam_02 · rtsp://192.168.1.65/…</text>
-<text x="485" y="166" text-anchor="middle" dominant-baseline="central" font-size="11" fill="#AFA9EC" font-family="sans-serif">task: marker · 独立 K / dist / R / t</text>
-<rect x="40" y="218" width="600" height="72" rx="10" fill="#444441" stroke="#B4B2A9" stroke-width="0.5"/>
-<text x="56" y="240" dominant-baseline="central" font-size="13" font-weight="500" fill="#D3D1C7" font-family="sans-serif">models:  pole_seg / marker_det</text>
-<text x="56" y="264" dominant-baseline="central" font-size="11" fill="#B4B2A9" font-family="sans-serif">各含 weights · openvino_dir · confidence · class_id · device · tracker</text>
-<rect x="40" y="306" width="600" height="72" rx="10" fill="#085041" stroke="#5DCAA5" stroke-width="0.5"/>
-<text x="56" y="328" dominant-baseline="central" font-size="13" font-weight="500" fill="#9FE1CB" font-family="sans-serif">pole:  立柱分支参数</text>
-<text x="56" y="352" dominant-baseline="central" font-size="11" fill="#5DCAA5" font-family="sans-serif">sample_fps: 1.0 · measurement(RANSAC/质量门控/EMA) · baseline · alarm</text>
-<rect x="40" y="394" width="600" height="72" rx="10" fill="#633806" stroke="#EF9F27" stroke-width="0.5"/>
-<text x="56" y="416" dominant-baseline="central" font-size="13" font-weight="500" fill="#FAC775" font-family="sans-serif">marker:  靶标分支参数</text>
-<text x="56" y="440" dominant-baseline="central" font-size="11" fill="#EF9F27" font-family="sans-serif">fft_window_s: 30 · localization(λmin 锚点/亚像素) · tracking · 直径标定</text>
-<rect x="40" y="482" width="600" height="56" rx="10" fill="#0C447C" stroke="#85B7EB" stroke-width="0.5"/>
-<text x="56" y="502" dominant-baseline="central" font-size="13" font-weight="500" fill="#B5D4F4" font-family="sans-serif">runtime:  运行参数</text>
-<text x="56" y="522" dominant-baseline="central" font-size="11" fill="#85B7EB" font-family="sans-serif">队列容量 · 攒批策略 · 初始基准持久化 · 断线重连 · 日志级别</text>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 760 974" width="760" height="974" role="img" font-family="sans-serif">
+<title>config.yaml 单一配置文件结构（实际拓扑）</title>
+<desc>配置文件顶层六段：cameras 摄像头清单（4 路：2 pole + 2 marker，其中 2 路挂内联标定、2 路 marker 不挂标定）、models 模型、pole 与 marker 分支参数、dashboard 大屏参数、runtime 运行参数。一条命令 uv run python main.py 启动全部。marker.alarm 含振幅/索力/挠度三类振动报警阈值，runtime.capture 含 RTSP 振动报警滚动缓冲参数。</desc>
+<rect x="0" y="0" width="760" height="974" fill="#2B2B28"/>
+<text x="40" y="36" dominant-baseline="central" font-size="16" font-weight="600" fill="#D3D1C7">config.yaml — 唯一配置文件（实际拓扑）</text>
+<text x="40" y="58" dominant-baseline="central" font-size="12" fill="#888780">一条命令启动：uv run python main.py   （--config config.yaml 可选，--refresh-init 强制重建锚点）</text>
+
+<!-- 1. cameras -->
+<rect x="40" y="78" width="680" height="134" rx="10" fill="#3C3489" stroke="#AFA9EC" stroke-width="0.6"/>
+<text x="56" y="98" dominant-baseline="central" font-size="13" font-weight="600" fill="#CECBF6">cameras:  唯一摄像头清单（id · url · task · 内联标定，全项目唯一）</text>
+<rect x="56" y="110" width="320" height="42" rx="7" fill="#26215C" stroke="#7F77DD" stroke-width="0.5"/>
+<text x="68" y="126" dominant-baseline="central" font-size="11.5" font-weight="500" fill="#CECBF6">pole_cam_01  rtsp://192.168.1.65/…/101</text>
+<text x="68" y="143" dominant-baseline="central" font-size="10.5" fill="#AFA9EC">task: pole · 内联 K / dist / R / t</text>
+<rect x="392" y="110" width="320" height="42" rx="7" fill="#26215C" stroke="#7F77DD" stroke-width="0.5"/>
+<text x="404" y="126" dominant-baseline="central" font-size="11.5" font-weight="500" fill="#CECBF6">pole_cam_02  rtsp://192.168.1.64/…/101</text>
+<text x="404" y="143" dominant-baseline="central" font-size="10.5" fill="#AFA9EC">task: pole · 内联 K / dist / R / t</text>
+<rect x="56" y="158" width="320" height="42" rx="7" fill="#26215C" stroke="#7F77DD" stroke-width="0.5"/>
+<text x="68" y="174" dominant-baseline="central" font-size="11.5" font-weight="500" fill="#CECBF6">marker_cam_01  rtsp://192.168.1.65/…/101</text>
+<text x="68" y="191" dominant-baseline="central" font-size="10.5" fill="#AFA9EC">task: marker · 不挂 calibration（亚像素自标定 mm/px）</text>
+<rect x="392" y="158" width="320" height="42" rx="7" fill="#26215C" stroke="#7F77DD" stroke-width="0.5"/>
+<text x="404" y="174" dominant-baseline="central" font-size="11.5" font-weight="500" fill="#CECBF6">marker_cam_02  rtsp://192.168.1.64/…/101</text>
+<text x="404" y="191" dominant-baseline="central" font-size="10.5" fill="#AFA9EC">task: marker · 不挂 calibration</text>
+
+<!-- 2. models -->
+<rect x="40" y="220" width="680" height="96" rx="10" fill="#444441" stroke="#B4B2A9" stroke-width="0.6"/>
+<text x="56" y="240" dominant-baseline="central" font-size="13" font-weight="600" fill="#D3D1C7">models:  每分支各加载一份（跨摄像头攒批推理，device 默认 intel:gpu）</text>
+<text x="56" y="262" dominant-baseline="central" font-size="11" fill="#B4B2A9">pole_seg   : weights / openvino_dir / confidence 0.25 / class_id 0 / device / tracker bytetrack.yaml</text>
+<text x="56" y="284" dominant-baseline="central" font-size="11" fill="#B4B2A9">marker_det : weights / openvino_dir / confidence 0.25 / class_id 0 / device / tracker bytetrack.yaml</text>
+<text x="56" y="304" dominant-baseline="central" font-size="10" fill="#7E7C75">优先 OpenVINO 导出目录（含 .xml，dynamic 多 batch），回退 .pt 权重</text>
+
+<!-- 3. pole -->
+<rect x="40" y="322" width="680" height="122" rx="10" fill="#085041" stroke="#5DCAA5" stroke-width="0.6"/>
+<text x="56" y="342" dominant-baseline="central" font-size="13" font-weight="600" fill="#9FE1CB">pole:  立柱分支参数</text>
+<text x="56" y="364" dominant-baseline="central" font-size="11" fill="#5DCAA5">sample_fps: 1.0   （每秒抽 1 帧处理，不超源 FPS）</text>
+<text x="56" y="384" dominant-baseline="central" font-size="11" fill="#5DCAA5">measurement: mode image_relative · RANSAC(residual_px 2.5, iter 300) · 质量门控(threshold 0.60) · EMA 参数</text>
+<text x="56" y="404" dominant-baseline="central" font-size="11" fill="#5DCAA5">baseline: enabled · frames 60 / relative_frames 1    filter: EMA alpha 0.25</text>
+<text x="56" y="424" dominant-baseline="central" font-size="11" fill="#5DCAA5">alarm: 左右 2.0° / 前后 2.0° / 总 2.5°</text>
+
+<!-- 4. marker -->
+<rect x="40" y="452" width="680" height="206" rx="10" fill="#633806" stroke="#EF9F27" stroke-width="0.6"/>
+<text x="56" y="472" dominant-baseline="central" font-size="13" font-weight="600" fill="#FAC775">marker:  靶标分支参数</text>
+<text x="56" y="494" dominant-baseline="central" font-size="11.5" font-weight="500" fill="#FAC775">fft:  window_s 30.0 · snr 5.0 · min_samples 32 · min_span_s 10.0   ← 固定不重叠 30s 窗，SNR≥5 门控</text>
+<text x="56" y="514" dominant-baseline="central" font-size="10.5" fill="#EF9F27">（原图 fft_window_s:30 字段名已更正为 window_s，并补齐 snr / min_samples / min_span_s）</text>
+<text x="56" y="534" dominant-baseline="central" font-size="11" fill="#EF9F27">calibration: real_diameter_mm 100.0 · frames 8 / min_frames 1（外圈圆直径自标定 mm/px）</text>
+<text x="56" y="554" dominant-baseline="central" font-size="11" fill="#EF9F27">localization: structure_sigma 1.5 · min_lambda_min 5000 · subpixel_window 5 · win_ratio 0.25 · max_jump_px 3.0</text>
+<text x="56" y="574" dominant-baseline="central" font-size="11" fill="#EF9F27">tracking: bytetrack · persist true</text>
+<text x="56" y="594" dominant-baseline="central" font-size="11" fill="#EF9F27">placeholder: enabled true · deflection_mm 0.0 · cable_force_idx 100.0   ← 挠度/索力未建模，界面显占位</text>
+<text x="56" y="614" dominant-baseline="central" font-size="10.5" fill="#C98A2E">（占位避免"位移幅值冒充挠度、频率平方比冒充索力"的假值；真实模型接入后置 enabled=false）</text>
+<line x1="56" y1="624" x2="704" y2="624" stroke="#A06522" stroke-width="0.7"/>
+<text x="56" y="640" dominant-baseline="central" font-size="11.5" font-weight="500" fill="#FFD479">alarm:  amplitude_mm 5.0(真实) · deflection_mm 0.0(占位比较) · cable_force_idx 0.0(占位比较)   ← 三类振动报警阈值，&gt;0 启用</text>
+<text x="56" y="654" dominant-baseline="central" font-size="10" fill="#C98A2E">（任一命中即留存 事件+振动分析+视频片段；索力/挠度与 placeholder 值比较，详见 ⑥ 报警逻辑架构图）</text>
+
+<!-- 5. dashboard -->
+<rect x="40" y="662" width="680" height="80" rx="10" fill="#0C447C" stroke="#85B7EB" stroke-width="0.6"/>
+<text x="56" y="682" dominant-baseline="central" font-size="13" font-weight="600" fill="#B5D4F4">dashboard:  Web 大屏显示参数</text>
+<text x="56" y="704" dominant-baseline="central" font-size="11" fill="#85B7EB">stream_channel "101"（默认 102，由主码流 URL 派生子码流，与 main 主码流分离）</text>
+<text x="56" y="724" dominant-baseline="central" font-size="11" fill="#85B7EB">stream_fps 15（MJPEG 推送帧率）· reconnect_s 3.0（RTSP 断线重连间隔）</text>
+
+<!-- 6. runtime -->
+<rect x="40" y="750" width="680" height="202" rx="10" fill="#3A3A37" stroke="#B4B2A9" stroke-width="0.6"/>
+<text x="56" y="770" dominant-baseline="central" font-size="13" font-weight="600" fill="#D3D1C7">runtime:  运行参数</text>
+<text x="56" y="792" dominant-baseline="central" font-size="11" fill="#B4B2A9">output_dir output · log_level INFO · display false（实时画面统一走 Web 大屏 MJPEG，不弹 CV2 GUI）</text>
+<text x="56" y="812" dominant-baseline="central" font-size="11" fill="#B4B2A9">capture: mode threads · reconnect_s 5 · rtsp_low_latency true（TCP+nobuffer 低延迟拉流）</text>
+<text x="56" y="832" dominant-baseline="central" font-size="11" fill="#B4B2A9">　　　　  rtsp_rolling_s 120 · rtsp_seg_s 10（RTSP 振动报警滚动缓冲 → output/rtsp_buffer/&lt;cam&gt;/seg_*.mp4，见 ⑥）</text>
+<text x="56" y="852" dominant-baseline="central" font-size="11" fill="#B4B2A9">batch: pole.timeout_ms 500（整秒攒批）· marker.max_frames 8 / timeout_ms 60（滑动攒批）</text>
+<text x="56" y="872" dominant-baseline="central" font-size="11" fill="#B4B2A9">queue: pole_frame 64 · marker_frame 16 · result 256 · spectrum 512（帧队列文件源背压不丢 / 实时源丢旧保新）</text>
+<text x="56" y="892" dominant-baseline="central" font-size="11" fill="#B4B2A9">init: persist true · anchor(iou_min 0.3 / release_after_s 10.0 / ema_alpha 0.05 / relock_max_px 200.0)</text>
+<text x="56" y="912" dominant-baseline="central" font-size="10.5" fill="#7E7C75">anchor 前三项仅 pole 立柱用；relock_max_px 仅 marker 用（多目标张冠李戴防护）</text>
 </svg>

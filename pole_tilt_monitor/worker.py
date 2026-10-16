@@ -17,8 +17,9 @@ from pathlib import Path
 import numpy as np
 
 from utils.anchor import AnchorRegistry
-from utils.common import (SENTINEL, get_any, log, now_ts, put_blocking,
-                          select_model_weights, to_float, to_float_list)
+from utils.common import (SENTINEL, get_any, is_realtime_source, log, now_ts,
+                          put_blocking, select_model_weights, to_float,
+                          to_float_list)
 from utils.inference import SegInference, make_byte_tracker, tracker_update
 from utils.persist import (atomic_write_json, build_init_state, init_paths,
                            load_json, save_anchor_frame, write_calibration_yaml)
@@ -92,6 +93,8 @@ class PoleCameraSession:
         self.init_bg_frame = None  # 初始帧背景：首帧采一次，之后只在其上叠加已就绪基线的拟合线
         self._drawn_key = None  # 上次重绘时的"已就绪基线集合"，变化才重绘（幂等防抖）
         self._init_wait_t0 = None  # 首次成功初始化前的等待计时（未建立则不锁死）
+        # 立柱报警留存节流：同一 (cam_id, pid) 最短冷却间隔才再写盘，避免每秒一张刷屏
+        self._alarm_cooldowns = {}
 
     def handle_init(self, dets, ts):
         """初始化：加载已保存初始状态，或从带检测的帧建立锚点。
@@ -369,6 +372,21 @@ def run_pole_inference(cfg: dict, cameras: list, frame_queues: dict, result_q,
                         "branch": "pole", "kind": "measurement",
                         "cam_id": cid, "ts": float(msg["ts"]), "data": record,
                     })
+                    # 立柱报警留存：原始帧 + 重新编码帧（画框+拟合直线）成对落盘，
+                    # 供大屏报警记录页回溯。受 session 级 cooldown 节流，不会刷屏。
+                    if alarm:
+                        try:
+                            from utils.alarm_store import save_pole_alarm_snapshot
+                            # 命名区分实时/文件源：实时→当前时间，文件→frame_id
+                            # （is_realtime_source 由相机 url 判定，保证与 capture 口径一致）
+                            save_pole_alarm_snapshot(
+                                runtime["output_dir"], cid, msg["ts"], frame,
+                                record, alarm_cfg, session._alarm_cooldowns,
+                                cooldown_s=float(alarm_cfg.get("cooldown_s", 5.0)),
+                                is_realtime=is_realtime_source(session.cam["url"]),
+                                frame_id=msg["frame_id"])
+                        except Exception as exc:
+                            log(tag, f"立柱报警留存失败 {cid}/{pid}: {exc}")
                     frame_pids.append(pid)
 
                 # 即使本帧没有任何有效测量，也发布当前帧的目标集合。

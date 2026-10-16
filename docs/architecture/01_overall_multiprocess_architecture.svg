@@ -1,79 +1,167 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 680 700" width="680" height="700" role="img">
-<title>柔性光伏支架可视化监测系统总体多进程架构（批推理模式）</title>
-<desc>Supervisor 主进程管理两条分支：每分支一个拉流进程（内部每摄像头一个读流线程）加一个推理进程，模型只加载一次，跨摄像头攒批推理；共享 SpectrumAnalyzer 与 Recorder 进程，输出结构化 JSONL 文件；进程总数恒为 7，与摄像头数量无关。</desc>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1000 1226" width="1000" height="1226" role="img" font-family="sans-serif">
+<title>柔性光伏支架可视化监测系统总体多进程架构（批推理模式 · 文件源 / RTSP 实时流双链路）</title>
+<desc>Supervisor 主进程管理两条分支：每分支一个拉流进程（内部每摄像头一个读流线程）加一个推理进程，模型只加载一次，跨摄像头攒批推理。关键差异：采集层文件源用 put_backpressure 背压不丢、RTSP 用 put_latest 丢旧保新+低延迟；消费层文件源由 supervisor 经 viz/export 生成带标注的 _annotated.mp4 供大屏回放，RTSP 源由 dashboard 后端 RtspStreamManager 直连子码流 MJPEG 推浏览器（纯原始画面，main 不发布图片）。报警留存为两条形状不同的链路：立柱倾角报警在 PoleInference 内联触发、直接调 alarm_store 逐帧落盘原始帧+重编码帧（不经 result_q/Recorder）；振动报警在 SpectrumAnalyzer 按振幅(真实)/索力(占位)/挠度(占位)三类阈值触发、经 events.jsonl 留存片段+分析（详见 06 报警逻辑架构图）。进程总数恒为 7，与摄像头数量无关。</desc>
 <defs>
-<marker id="arrow" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+<marker id="ar" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
 <path d="M2 1L8 5L2 9" fill="none" stroke="context-stroke" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
 </marker>
 </defs>
-<rect x="0" y="0" width="680" height="700" fill="#2B2B28"/>
-<rect x="200" y="28" width="280" height="56" rx="10" fill="#3C3489" stroke="#AFA9EC" stroke-width="0.5"/>
-<text x="340" y="48" text-anchor="middle" dominant-baseline="central" font-size="14" font-weight="500" fill="#CECBF6" font-family="sans-serif">Supervisor 主进程</text>
-<text x="340" y="68" text-anchor="middle" dominant-baseline="central" font-size="11" fill="#AFA9EC" font-family="sans-serif">配置加载校验 · spawn 进程树 · 健康监控 · 优雅退出</text>
-<path d="M340 84 V104 M180 104 H500 M180 104 V124 M500 104 V124" fill="none" stroke="#5F5E5A" stroke-width="1" stroke-dasharray="4 3"/>
-<path d="M180 124 V126" fill="none" stroke="#5F5E5A" stroke-width="1" marker-end="url(#arrow)"/>
-<path d="M500 124 V126" fill="none" stroke="#5F5E5A" stroke-width="1" marker-end="url(#arrow)"/>
-<rect x="30" y="130" width="300" height="370" rx="14" fill="#04342C" stroke="#1D9E75" stroke-width="0.5"/>
-<text x="44" y="152" dominant-baseline="central" font-size="13" font-weight="500" fill="#9FE1CB" font-family="sans-serif">立柱监测分支 · 分割模型仅加载 1 次</text>
-<rect x="46" y="166" width="268" height="100" rx="8" fill="#085041" stroke="#5DCAA5" stroke-width="0.5"/>
-<text x="180" y="186" text-anchor="middle" dominant-baseline="central" font-size="13" font-weight="500" fill="#9FE1CB" font-family="sans-serif">PoleCapture 进程 ×1</text>
-<text x="180" y="206" text-anchor="middle" dominant-baseline="central" font-size="11" fill="#5DCAA5" font-family="sans-serif">每摄像头一个读流线程 · 1fps grab+retrieve</text>
-<text x="180" y="222" text-anchor="middle" dominant-baseline="central" font-size="11" fill="#5DCAA5" font-family="sans-serif">去畸变（本机 K/dist）· 断线重连</text>
-<rect x="58" y="234" width="76" height="20" rx="5" fill="#04342C" stroke="#1D9E75" stroke-width="0.5"/>
-<text x="96" y="244" text-anchor="middle" dominant-baseline="central" font-size="11" fill="#9FE1CB" font-family="sans-serif">cam01 线程</text>
-<rect x="142" y="234" width="76" height="20" rx="5" fill="#04342C" stroke="#1D9E75" stroke-width="0.5"/>
-<text x="180" y="244" text-anchor="middle" dominant-baseline="central" font-size="11" fill="#9FE1CB" font-family="sans-serif">cam02 线程</text>
-<rect x="226" y="234" width="76" height="20" rx="5" fill="#04342C" stroke="#1D9E75" stroke-width="0.5"/>
-<text x="264" y="244" text-anchor="middle" dominant-baseline="central" font-size="11" fill="#9FE1CB" font-family="sans-serif">camN 线程</text>
-<path d="M180 266 V294" fill="none" stroke="#888780" stroke-width="1.5" marker-end="url(#arrow)"/>
-<text x="190" y="278" dominant-baseline="central" font-size="11" fill="#888780" font-family="sans-serif">帧队列 q=2</text>
-<text x="190" y="292" dominant-baseline="central" font-size="11" fill="#888780" font-family="sans-serif">带 cam_id·frame_id·ts</text>
-<rect x="46" y="298" width="268" height="118" rx="8" fill="#085041" stroke="#5DCAA5" stroke-width="0.5"/>
-<text x="180" y="318" text-anchor="middle" dominant-baseline="central" font-size="13" font-weight="500" fill="#9FE1CB" font-family="sans-serif">PoleInference 进程 ×1</text>
-<text x="180" y="338" text-anchor="middle" dominant-baseline="central" font-size="11" fill="#5DCAA5" font-family="sans-serif">pole26s_seg(OpenVINO) 仅加载一次（省 N−1 份内存）</text>
-<text x="180" y="354" text-anchor="middle" dominant-baseline="central" font-size="11" fill="#5DCAA5" font-family="sans-serif">整秒攒批：等齐 N 路或 500ms 超时</text>
-<text x="180" y="370" text-anchor="middle" dominant-baseline="central" font-size="11" fill="#5DCAA5" font-family="sans-serif">批量前向 → 按 cam_id 拆分</text>
-<text x="180" y="386" text-anchor="middle" dominant-baseline="central" font-size="11" fill="#5DCAA5" font-family="sans-serif">PoleCameraSession：ByteTrack + RANSAC + EMA</text>
-<text x="180" y="448" text-anchor="middle" dominant-baseline="central" font-size="11" fill="#5DCAA5" font-family="sans-serif">会话类逐杆状态（基准·EMA·报警）按 (cam_id, pole_id) 隔离</text>
-<rect x="350" y="130" width="300" height="370" rx="14" fill="#412402" stroke="#BA7517" stroke-width="0.5"/>
-<text x="364" y="152" dominant-baseline="central" font-size="13" font-weight="500" fill="#FAC775" font-family="sans-serif">靶标跟踪分支 · 检测模型仅加载 1 次</text>
-<rect x="366" y="166" width="268" height="100" rx="8" fill="#633806" stroke="#EF9F27" stroke-width="0.5"/>
-<text x="500" y="186" text-anchor="middle" dominant-baseline="central" font-size="13" font-weight="500" fill="#FAC775" font-family="sans-serif">MarkerCapture 进程 ×1</text>
-<text x="500" y="206" text-anchor="middle" dominant-baseline="central" font-size="11" fill="#EF9F27" font-family="sans-serif">每摄像头一个读流线程 · 逐帧解码</text>
-<text x="500" y="222" text-anchor="middle" dominant-baseline="central" font-size="11" fill="#EF9F27" font-family="sans-serif">可选去畸变 · 断线重连</text>
-<rect x="378" y="234" width="76" height="20" rx="5" fill="#412402" stroke="#BA7517" stroke-width="0.5"/>
-<text x="416" y="244" text-anchor="middle" dominant-baseline="central" font-size="11" fill="#FAC775" font-family="sans-serif">cam01 线程</text>
-<rect x="462" y="234" width="76" height="20" rx="5" fill="#412402" stroke="#BA7517" stroke-width="0.5"/>
-<text x="500" y="244" text-anchor="middle" dominant-baseline="central" font-size="11" fill="#FAC775" font-family="sans-serif">cam02 线程</text>
-<rect x="546" y="234" width="76" height="20" rx="5" fill="#412402" stroke="#BA7517" stroke-width="0.5"/>
-<text x="584" y="244" text-anchor="middle" dominant-baseline="central" font-size="11" fill="#FAC775" font-family="sans-serif">camN 线程</text>
-<path d="M500 266 V294" fill="none" stroke="#888780" stroke-width="1.5" marker-end="url(#arrow)"/>
-<text x="510" y="278" dominant-baseline="central" font-size="11" fill="#888780" font-family="sans-serif">帧队列 q=16</text>
-<text x="510" y="292" dominant-baseline="central" font-size="11" fill="#888780" font-family="sans-serif">按摄像头丢旧保序</text>
-<rect x="366" y="298" width="268" height="118" rx="8" fill="#633806" stroke="#EF9F27" stroke-width="0.5"/>
-<text x="500" y="318" text-anchor="middle" dominant-baseline="central" font-size="13" font-weight="500" fill="#FAC775" font-family="sans-serif">MarkerInference 进程 ×1</text>
-<text x="500" y="338" text-anchor="middle" dominant-baseline="central" font-size="11" fill="#EF9F27" font-family="sans-serif">marker26s(OpenVINO) 仅加载一次</text>
-<text x="500" y="354" text-anchor="middle" dominant-baseline="central" font-size="11" fill="#EF9F27" font-family="sans-serif">滑动攒批：满 8 帧或 60ms 超时 · 跨摄像头混批</text>
-<text x="500" y="370" text-anchor="middle" dominant-baseline="central" font-size="11" fill="#EF9F27" font-family="sans-serif">批量前向 → 按 cam_id 拆分</text>
-<text x="500" y="386" text-anchor="middle" dominant-baseline="central" font-size="11" fill="#EF9F27" font-family="sans-serif">MarkerCameraSession：ByteTrack+TargetLock+λmin</text>
-<path d="M500 416 V440" fill="none" stroke="#888780" stroke-width="1.5" marker-end="url(#arrow)"/>
-<rect x="366" y="442" width="268" height="48" rx="8" fill="#412402" stroke="#BA7517" stroke-width="0.5"/>
-<text x="500" y="460" text-anchor="middle" dominant-baseline="central" font-size="13" font-weight="500" fill="#FAC775" font-family="sans-serif">SpectrumAnalyzer 进程 ×1</text>
-<text x="500" y="478" text-anchor="middle" dominant-baseline="central" font-size="11" fill="#EF9F27" font-family="sans-serif">每 (cam_id, track_id) 30s 窗口 FFT 主频</text>
-<path d="M180 500 V526" fill="none" stroke="#888780" stroke-width="1.5" marker-end="url(#arrow)"/>
-<text x="170" y="515" text-anchor="end" dominant-baseline="central" font-size="11" fill="#888780" font-family="sans-serif">倾角时序</text>
-<path d="M500 500 V526" fill="none" stroke="#888780" stroke-width="1.5" marker-end="url(#arrow)"/>
-<text x="510" y="515" dominant-baseline="central" font-size="11" fill="#888780" font-family="sans-serif">位移+主频</text>
-<rect x="200" y="530" width="280" height="56" rx="10" fill="#0C447C" stroke="#85B7EB" stroke-width="0.5"/>
-<text x="340" y="550" text-anchor="middle" dominant-baseline="central" font-size="14" font-weight="500" fill="#B5D4F4" font-family="sans-serif">Recorder 进程 ×1</text>
-<text x="340" y="568" text-anchor="middle" dominant-baseline="central" font-size="11" fill="#85B7EB" font-family="sans-serif">单一写入者 · JSONL 追加 + latest.json 快照</text>
-<path d="M270 586 V606 H180 V624" fill="none" stroke="#888780" stroke-width="1.5" marker-end="url(#arrow)"/>
-<path d="M410 586 V606 H500 V624" fill="none" stroke="#888780" stroke-width="1.5" marker-end="url(#arrow)"/>
-<rect x="30" y="628" width="300" height="52" rx="8" fill="#444441" stroke="#888780" stroke-width="0.5"/>
-<text x="180" y="646" text-anchor="middle" dominant-baseline="central" font-size="13" font-weight="500" fill="#D3D1C7" font-family="sans-serif">output/pole/{cam_id}/</text>
-<text x="180" y="664" text-anchor="middle" dominant-baseline="central" font-size="11" fill="#B4B2A9" font-family="sans-serif">measurements.jsonl · latest.json</text>
-<rect x="350" y="628" width="300" height="52" rx="8" fill="#444441" stroke="#888780" stroke-width="0.5"/>
-<text x="500" y="646" text-anchor="middle" dominant-baseline="central" font-size="13" font-weight="500" fill="#D3D1C7" font-family="sans-serif">output/marker/{cam_id}/</text>
-<text x="500" y="664" text-anchor="middle" dominant-baseline="central" font-size="11" fill="#B4B2A9" font-family="sans-serif">displacement.jsonl · spectrum.jsonl</text>
-<text x="340" y="694" text-anchor="middle" dominant-baseline="central" font-size="11" fill="#888780" font-family="sans-serif">进程总数恒为 7，与摄像头数量无关；两个模型各仅加载一份</text>
+<rect x="0" y="0" width="1000" height="1226" fill="#2B2B28"/>
+
+<!-- ===== TITLE ===== -->
+<text x="500" y="30" text-anchor="middle" dominant-baseline="central" font-size="17" font-weight="700" fill="#D3D1C7">柔性光伏支架可视化监测系统 · 总体多进程架构</text>
+<text x="500" y="50" text-anchor="middle" dominant-baseline="central" font-size="11.5" fill="#888780">批推理模式 · 进程总数恒为 7（Supervisor + 6 子进程），与摄像头数量无关　|　📁 = 文件源　📡 = RTSP 实时流</text>
+
+<!-- ===== SUPERVISOR ===== -->
+<rect x="300" y="62" width="400" height="50" rx="10" fill="#3C3489" stroke="#AFA9EC" stroke-width="0.6"/>
+<text x="500" y="80" text-anchor="middle" dominant-baseline="central" font-size="14" font-weight="600" fill="#CECBF6">Supervisor 主进程</text>
+<text x="500" y="98" text-anchor="middle" dominant-baseline="central" font-size="10.5" fill="#AFA9EC">配置加载校验 · spawn 进程树 · 健康监控 · 优雅退出 · 收尾导出标注视频</text>
+
+<!-- spawn dashed -->
+<path d="M500 112 V128 M245 128 H755 M245 128 V150 M755 128 V150" fill="none" stroke="#5F5E5A" stroke-width="1.2" stroke-dasharray="4 3"/>
+<path d="M245 150 V156 M755 150 V156" fill="none" stroke="#5F5E5A" stroke-width="1" marker-end="url(#ar)"/>
+
+<!-- column tint backgrounds -->
+<rect x="44" y="132" width="402" height="430" rx="12" fill="#06342C" stroke="#1D9E75" stroke-width="0.4"/>
+<rect x="554" y="132" width="402" height="430" rx="12" fill="#2E1E05" stroke="#BA7517" stroke-width="0.4"/>
+
+<!-- column headers -->
+<text x="245" y="156" text-anchor="middle" dominant-baseline="central" font-size="13" font-weight="600" fill="#9FE1CB">立柱监测分支 · 分割模型仅加载 1 次</text>
+<text x="755" y="156" text-anchor="middle" dominant-baseline="central" font-size="13" font-weight="600" fill="#FAC775">靶标跟踪分支 · 检测模型仅加载 1 次</text>
+
+<!-- ===== POLE CAPTURE ===== -->
+<rect x="60" y="170" width="370" height="104" rx="9" fill="#085041" stroke="#5DCAA5" stroke-width="0.6"/>
+<text x="245" y="190" text-anchor="middle" dominant-baseline="central" font-size="13" font-weight="600" fill="#9FE1CB">PoleCapture 进程 ×1</text>
+<text x="245" y="210" text-anchor="middle" dominant-baseline="central" font-size="11" fill="#5DCAA5">每摄像头一个读流线程 · 去畸变 · 断线重连</text>
+<text x="245" y="232" text-anchor="middle" dominant-baseline="central" font-size="10.5" fill="#9FE1CB">📁 文件源：1fps 抽帧 · 背压不丢(put_backpressure)</text>
+<text x="245" y="252" text-anchor="middle" dominant-baseline="central" font-size="10.5" fill="#9FE1CB">📡 RTSP流：丢旧保新(put_latest) · 低延迟拉流</text>
+
+<!-- ===== MARKER CAPTURE ===== -->
+<rect x="570" y="170" width="370" height="104" rx="9" fill="#633806" stroke="#EF9F27" stroke-width="0.6"/>
+<text x="755" y="190" text-anchor="middle" dominant-baseline="central" font-size="13" font-weight="600" fill="#FAC775">MarkerCapture 进程 ×1</text>
+<text x="755" y="210" text-anchor="middle" dominant-baseline="central" font-size="11" fill="#EF9F27">每摄像头一个读流线程 · 可选去畸变 · 断线重连</text>
+<text x="755" y="232" text-anchor="middle" dominant-baseline="central" font-size="10.5" fill="#FAC775">📁 文件源：逐帧解码(全帧率) · 背压不丢</text>
+<text x="755" y="252" text-anchor="middle" dominant-baseline="central" font-size="10.5" fill="#FAC775">📡 RTSP流：丢旧保新(put_latest) · 低延迟拉流</text>
+
+<!-- arrows capture -> inference -->
+<path d="M245 274 V296 M755 274 V296" fill="none" stroke="#888780" stroke-width="1.5" marker-end="url(#ar)"/>
+
+<!-- ===== POLE INFERENCE ===== -->
+<rect x="60" y="296" width="370" height="150" rx="9" fill="#085041" stroke="#5DCAA5" stroke-width="0.6"/>
+<text x="245" y="316" text-anchor="middle" dominant-baseline="central" font-size="13" font-weight="600" fill="#9FE1CB">PoleInference 进程 ×1</text>
+<text x="245" y="336" text-anchor="middle" dominant-baseline="central" font-size="11" fill="#5DCAA5">pole26s_seg(OpenVINO) 仅加载一次（省 N−1 份显存）</text>
+<text x="245" y="356" text-anchor="middle" dominant-baseline="central" font-size="11" fill="#5DCAA5">攒批：等齐"已出帧相机" 或 500ms 超时</text>
+<text x="245" y="376" text-anchor="middle" dominant-baseline="central" font-size="11" fill="#5DCAA5">批量前向 → 按 cam_id 拆分</text>
+<text x="245" y="396" text-anchor="middle" dominant-baseline="central" font-size="11" fill="#5DCAA5">PoleCameraSession：ByteTrack + AnchorRegistry</text>
+<text x="245" y="416" text-anchor="middle" dominant-baseline="central" font-size="11" fill="#5DCAA5">中心线上(快)/骨架兜底 → RANSAC 倾角</text>
+<text x="245" y="436" text-anchor="middle" dominant-baseline="central" font-size="11" fill="#5DCAA5">质量门控 · EMA · 基线 delta · 倾角报警(<tspan fill="#F0997B" font-weight="600">内联落盘</tspan>)</text>
+
+<!-- 立柱报警内联旁路：PoleInference 内 if alarm 直接写盘（不经 Recorder） -->
+<path d="M60 436 H30 V1094 H56" fill="none" stroke="#D85A30" stroke-width="1.4" stroke-dasharray="5 4" marker-end="url(#ar)"/>
+<text x="24" y="770" dominant-baseline="central" font-size="9.5" fill="#D85A30" transform="rotate(-90 24 770)" text-anchor="middle">内联旁路 · alarm=True 直接落盘（不经 result_q / Recorder）</text>
+
+<!-- ===== MARKER INFERENCE ===== -->
+<rect x="570" y="296" width="370" height="150" rx="9" fill="#633806" stroke="#EF9F27" stroke-width="0.6"/>
+<text x="755" y="316" text-anchor="middle" dominant-baseline="central" font-size="13" font-weight="600" fill="#FAC775">MarkerInference 进程 ×1</text>
+<text x="755" y="336" text-anchor="middle" dominant-baseline="central" font-size="11" fill="#EF9F27">marker26s_det(OpenVINO) 仅加载一次</text>
+<text x="755" y="356" text-anchor="middle" dominant-baseline="central" font-size="11" fill="#EF9F27">滑动攒批：满 8 帧 或 60ms 超时</text>
+<text x="755" y="376" text-anchor="middle" dominant-baseline="central" font-size="11" fill="#EF9F27">批量前向 → 按 cam_id 拆分</text>
+<text x="755" y="396" text-anchor="middle" dominant-baseline="central" font-size="11" fill="#EF9F27">MarkerCameraSession：ByteTrack + TargetLock</text>
+<text x="755" y="416" text-anchor="middle" dominant-baseline="central" font-size="11" fill="#EF9F27">λmin 选峰 + cornerSubPix 亚像素</text>
+<text x="755" y="436" text-anchor="middle" dominant-baseline="central" font-size="11" fill="#EF9F27">mm/px 自标定 · 累计位移 · 基线 delta</text>
+
+<!-- ===== SPECTRUM ANALYZER (marker only, independent) ===== -->
+<rect x="570" y="460" width="370" height="96" rx="9" fill="#412402" stroke="#BA7517" stroke-width="0.6"/>
+<text x="755" y="478" text-anchor="middle" dominant-baseline="central" font-size="13" font-weight="600" fill="#FAC775">SpectrumAnalyzer 进程 ×1（独立）</text>
+<text x="755" y="496" text-anchor="middle" dominant-baseline="central" font-size="11" fill="#EF9F27">消费 spectrum_q · 30s 固定窗 · dx/dy 双轴 FFT</text>
+<text x="755" y="514" text-anchor="middle" dominant-baseline="central" font-size="11" fill="#EF9F27">SNR≥5 选轴 → 主频（spectrum.jsonl）</text>
+<text x="755" y="532" text-anchor="middle" dominant-baseline="central" font-size="11" fill="#FAC775">振动报警：振幅(真) / 索力(占位) / 挠度(占位) 三类阈值</text>
+<text x="755" y="550" text-anchor="middle" dominant-baseline="central" font-size="10.5" fill="#C98A2E">命中 → 事件 + 振动分析 + 片段留存；RTSP 经 clip_q 滚动切窗（见 ⑥ 图）</text>
+
+<!-- Pole 倾角时序 → 汇聚总线（自推理框底部竖直引出，与位移线平行） -->
+<path d="M245 446 V580" fill="none" stroke="#5DCAA5" stroke-width="1.5"/>
+<!-- Marker 位移时序 → 总线（自 MarkerInference 左下角 570,446 引出，左拐 10px 后竖直下行，杜绝悬空） -->
+<path d="M570 446 H560 V580" fill="none" stroke="#EF9F27" stroke-width="1.5"/>
+<!-- Marker → SpectrumAnalyzer（spectrum_q，进入独立进程框带箭头） -->
+<path d="M755 446 V460" fill="none" stroke="#EF9F27" stroke-width="1.5" marker-end="url(#ar)"/>
+<!-- SpectrumAnalyzer 主频 → 总线 -->
+<path d="M755 556 V580" fill="none" stroke="#EF9F27" stroke-width="1.5"/>
+<!-- 汇聚总线（仅聚合，无箭头） -->
+<path d="M245 580 H755" fill="none" stroke="#888780" stroke-width="1.5"/>
+<!-- 总线 → Recorder（唯一带箭头终点的流向） -->
+<path d="M500 580 V600" fill="none" stroke="#888780" stroke-width="1.5" marker-end="url(#ar)"/>
+
+<!-- 箭头标注 -->
+<text x="232" y="514" text-anchor="end" dominant-baseline="central" font-size="10" fill="#5DCAA5">倾角时序</text>
+<text x="548" y="514" text-anchor="end" dominant-baseline="central" font-size="10" fill="#EF9F27">位移时序</text>
+<text x="742" y="566" text-anchor="end" dominant-baseline="central" font-size="10" fill="#EF9F27">主频</text>
+
+<!-- ===== RECORDER ===== -->
+<rect x="350" y="600" width="300" height="56" rx="10" fill="#0C447C" stroke="#85B7EB" stroke-width="0.6"/>
+<text x="500" y="620" text-anchor="middle" dominant-baseline="central" font-size="14" font-weight="600" fill="#B5D4F4">Recorder 进程 ×1（单写者）</text>
+<text x="500" y="640" text-anchor="middle" dominant-baseline="central" font-size="10.5" fill="#85B7EB">JSONL 追加 + latest.json · camera_done 写 .rec_done</text>
+
+<!-- ===== EXPORT (supervisor driven, file only) ===== -->
+<path d="M500 656 V676" fill="none" stroke="#888780" stroke-width="1.5" marker-end="url(#ar)"/>
+<rect x="300" y="676" width="400" height="46" rx="9" fill="#3C3489" stroke="#AFA9EC" stroke-width="0.6"/>
+<text x="500" y="694" text-anchor="middle" dominant-baseline="central" font-size="11" fill="#CECBF6">Supervisor 见 .rec_done → viz/export.py（仅文件源）</text>
+<text x="500" y="712" text-anchor="middle" dominant-baseline="central" font-size="11" fill="#AFA9EC">ffmpeg 二次封装 H.264+faststart → {cam_id}_annotated.mp4</text>
+
+<!-- ===== CONSUMPTION / DISPLAY BAND ===== -->
+<path d="M500 722 V740" fill="none" stroke="#5F5E5A" stroke-width="1.2" stroke-dasharray="4 3" marker-end="url(#ar)"/>
+<rect x="40" y="740" width="920" height="150" rx="12" fill="#3A3A37" stroke="#888780" stroke-width="0.6"/>
+<text x="500" y="762" text-anchor="middle" dominant-baseline="central" font-size="13" font-weight="600" fill="#D3D1C7">数据消费与展示 · Web 大屏（dashboard）</text>
+<line x1="500" y1="774" x2="500" y2="882" stroke="#888780" stroke-width="1" stroke-dasharray="3 3"/>
+
+<!-- FILE sub-path -->
+<rect x="56" y="774" width="420" height="100" rx="9" fill="#0A2A3A" stroke="#85B7EB" stroke-width="0.6"/>
+<text x="266" y="794" text-anchor="middle" dominant-baseline="central" font-size="11.5" font-weight="600" fill="#B5D4F4">📁 文件源相机（处理完有落盘产物）</text>
+<text x="266" y="814" text-anchor="middle" dominant-baseline="central" font-size="10.5" fill="#85B7EB">supervisor 收 camera_done → viz/export.py 生成标注视频</text>
+<text x="266" y="834" text-anchor="middle" dominant-baseline="central" font-size="10.5" fill="#85B7EB">ffmpeg 封装 H.264 → output/{branch}/{cam}/<tspan font-weight="700" fill="#B5D4F4">{cam_id}_annotated.mp4</tspan></text>
+<text x="266" y="854" text-anchor="middle" dominant-baseline="central" font-size="10.5" fill="#85B7EB">&lt;video&gt; 播 _annotated.mp4，按播放时间驱动状态联动（可回放）</text>
+
+<!-- RTSP sub-path -->
+<rect x="524" y="774" width="420" height="100" rx="9" fill="#3A2606" stroke="#EF9F27" stroke-width="0.6"/>
+<text x="734" y="794" text-anchor="middle" dominant-baseline="central" font-size="11.5" font-weight="600" fill="#FAC775">📡 RTSP 实时源相机（main 不发布图片）</text>
+<text x="734" y="814" text-anchor="middle" dominant-baseline="central" font-size="10.5" fill="#EF9F27">大屏 RtspStreamManager 后台线程 cv2 直连子码流</text>
+<text x="734" y="834" text-anchor="middle" dominant-baseline="central" font-size="10.5" fill="#EF9F27">（Channels/101→102）· ~15fps 抓帧 JPEG 缓冲</text>
+<text x="734" y="854" text-anchor="middle" dominant-baseline="central" font-size="10.5" fill="#EF9F27">断线自动重连 · MJPEG 推浏览器（纯原始无叠加）· ⚠暂无落盘录像</text>
+
+<!-- ===== OUTPUT DIRS ===== -->
+<rect x="60" y="904" width="370" height="62" rx="9" fill="#444441" stroke="#888780" stroke-width="0.6"/>
+<text x="245" y="924" text-anchor="middle" dominant-baseline="central" font-size="12" font-weight="600" fill="#D3D1C7">output/pole/{cam_id}/</text>
+<text x="245" y="944" text-anchor="middle" dominant-baseline="central" font-size="10" fill="#B4B2A9">measurements.jsonl · latest.json · init/ · *_annotated.mp4</text>
+<rect x="570" y="904" width="370" height="62" rx="9" fill="#444441" stroke="#888780" stroke-width="0.6"/>
+<text x="755" y="924" text-anchor="middle" dominant-baseline="central" font-size="12" font-weight="600" fill="#D3D1C7">output/marker/{cam_id}/</text>
+<text x="755" y="944" text-anchor="middle" dominant-baseline="central" font-size="10" fill="#B4B2A9">displacement.jsonl · spectrum.jsonl · latest.json · init/ · *_annotated.mp4</text>
+
+<!-- ===== ALARM RETENTION SECTION（两条独立链路） ===== -->
+<rect x="40" y="976" width="920" height="212" rx="12" fill="#3A3A37" stroke="#888780" stroke-width="0.6"/>
+<rect x="40" y="976" width="920" height="4" rx="2" fill="#D85A30"/>
+<text x="56" y="1000" dominant-baseline="central" font-size="13" font-weight="600" fill="#D3D1C7">报警与数据留存 · 两条<tspan fill="#F0997B">形状不同</tspan>的链路（左：推理进程内联旁路 ｜ 右：经事件队列 → Recorder）</text>
+
+<!-- LEFT : pole alarm (inline, bypasses Recorder) -->
+<rect x="56" y="1014" width="436" height="164" rx="9" fill="#5A2410" stroke="#D85A30" stroke-width="0.7"/>
+<text x="72" y="1034" dominant-baseline="central" font-size="12" font-weight="700" fill="#F0997B">立柱倾角报警 · pole</text>
+<text x="476" y="1034" text-anchor="end" dominant-baseline="central" font-size="9.5" font-weight="600" fill="#D85A30">由 PoleInference 内联触发</text>
+<text x="72" y="1056" dominant-baseline="central" font-size="10.5" fill="#F0A98F">触发：|ΔLR| ≥ 2.0° 或 |ΔFB| ≥ 2.0° 或 |Δ总| ≥ 2.5°（任一命中）</text>
+<text x="72" y="1076" dominant-baseline="central" font-size="10.5" fill="#F0A98F">节流：cooldown_s 5.0s，同一 (cam_id, pid) 最短间隔（防刷屏）</text>
+<text x="72" y="1096" dominant-baseline="central" font-size="10.5" fill="#F0A98F">留存：原始帧(无叠加) + 重编码帧(画框+拟合直线) 成对写盘</text>
+<text x="72" y="1116" dominant-baseline="central" font-size="10.5" fill="#F0A98F">命名：RTSP {当前时间}_ ｜ 文件 {frame_id}_ → output/alarms/pole/</text>
+<text x="72" y="1136" dominant-baseline="central" font-size="10.5" fill="#F0A98F">＋ manifest.jsonl 追加明细（delta_lr/fb/total + 阈值 + 路径）</text>
+<text x="72" y="1158" dominant-baseline="central" font-size="9.5" fill="#C97B5E">⚠ 不经 Recorder：worker 直接调 utils/alarm_store（逐帧即时落盘）</text>
+
+<!-- RIGHT : vibration alarm (via events queue -> Recorder) -->
+<rect x="516" y="1014" width="428" height="164" rx="9" fill="#412402" stroke="#EF9F27" stroke-width="0.7"/>
+<text x="532" y="1034" dominant-baseline="central" font-size="12" font-weight="700" fill="#FAC775">振动测振报警 · marker</text>
+<text x="928" y="1034" text-anchor="end" dominant-baseline="central" font-size="9.5" font-weight="600" fill="#EF9F27">由 SpectrumAnalyzer 触发</text>
+<text x="532" y="1056" dominant-baseline="central" font-size="10.5" fill="#F5CE9B">触发：振幅(真实) / 索力(占位) / 挠度(占位) 三类阈值任一命中</text>
+<text x="532" y="1076" dominant-baseline="central" font-size="10.5" fill="#F5CE9B">→ emit 三类事件 → events.jsonl（Recorder 单写者落盘）</text>
+<text x="532" y="1096" dominant-baseline="central" font-size="10.5" fill="#F5CE9B">留存：原始视频片段 + 振动分析 → output/vibration/&lt;id&gt;.json 侧车</text>
+<text x="532" y="1114" dominant-baseline="central" font-size="10.5" fill="#8FE8EC">双产物：{原名}_original.mp4 原文件保留不删</text>
+<text x="532" y="1132" dominant-baseline="central" font-size="10.5" fill="#8FE8EC">　　　　　+ {原名}_h264.mp4 web 可播（&lt;video&gt; 用它）</text>
+<text x="532" y="1152" dominant-baseline="central" font-size="9.5" fill="#C98A2E">RTSP 滚动缓冲 output/rtsp_buffer/&lt;cam&gt;/seg_*.mp4；同窗共享片段</text>
+<text x="532" y="1168" dominant-baseline="central" font-size="9.5" fill="#C98A2E">文件源由 supervisor 收尾经 viz/clip_retention 抽取（详见 ⑥ 图）</text>
+
+<text x="500" y="1206" text-anchor="middle" dominant-baseline="central" font-size="10.5" fill="#888780">采集层：文件源背压不丢 / RTSP 丢旧保新+低延迟　｜　消费层：文件源出标注视频回放 / RTSP 直连子码流 MJPEG　｜　大屏报警记录页聚合两类来源（manifest + events + 侧车）</text>
 </svg>

@@ -1,47 +1,113 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 680 390" width="680" height="390" role="img">
-<title>两条分支的进程内数据流水线</title>
-<desc>立柱监测分支四步：1fps抽帧、去畸变、分割+ByteTrack、RANSAC中心线与倾角计算；靶标跟踪分支四步：逐帧解码、检测+ByteTrack锁定、λmin选峰+亚像素、位移测量，另有30秒FFT主频提取</desc>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 840 716" width="840" height="716" role="img" font-family="sans-serif">
+<title>两条分支的进程内数据流水线（实际代码）</title>
+<desc>立柱分支：1fps抽帧→去畸变→分割+ByteTrack→持久ID锚点匹配→几何观测双路径(行中心线快路径/骨架回退)→RANSAC拟合+质量→delta+EMA→measurements.jsonl。靶标分支：逐帧→检测+ByteTrack(持续跟踪)→λmin选峰+亚像素→位移mm/px→displacement.jsonl；位移样本发 spectrum_q 给独立 SpectrumAnalyzer 进程做 30s FFT，并按振幅/索力/挠度三类阈值触发振动报警留存（详见 06 图）。</desc>
 <defs>
-<marker id="arrow3" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+<marker id="ar" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
 <path d="M2 1L8 5L2 9" fill="none" stroke="context-stroke" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
 </marker>
 </defs>
-<rect x="0" y="0" width="680" height="390" fill="#2B2B28"/>
-<text x="40" y="42" dominant-baseline="central" font-size="15" font-weight="500" fill="#D3D1C7" font-family="sans-serif">进程内数据流水线（批推理基类 + 每摄像头会话类）</text>
-<text x="40" y="82" dominant-baseline="central" font-size="13" font-weight="500" fill="#9FE1CB" font-family="sans-serif">立柱监测 pole · 每秒 1 帧 · PoleCameraSession</text>
-<rect x="40" y="98" width="140" height="64" rx="8" fill="#085041" stroke="#5DCAA5" stroke-width="0.5"/>
-<text x="110" y="118" text-anchor="middle" dominant-baseline="central" font-size="13" font-weight="500" fill="#9FE1CB" font-family="sans-serif">1fps 抽帧</text>
-<text x="110" y="140" text-anchor="middle" dominant-baseline="central" font-size="11" fill="#5DCAA5" font-family="sans-serif">grab+retrieve 保时序</text>
-<path d="M180 130 H194" fill="none" stroke="#888780" stroke-width="1.5" marker-end="url(#arrow3)"/>
-<rect x="196" y="98" width="140" height="64" rx="8" fill="#085041" stroke="#5DCAA5" stroke-width="0.5"/>
-<text x="266" y="118" text-anchor="middle" dominant-baseline="central" font-size="13" font-weight="500" fill="#9FE1CB" font-family="sans-serif">去畸变</text>
-<text x="266" y="140" text-anchor="middle" dominant-baseline="central" font-size="11" fill="#5DCAA5" font-family="sans-serif">本摄像头 K / dist</text>
-<path d="M336 130 H350" fill="none" stroke="#888780" stroke-width="1.5" marker-end="url(#arrow3)"/>
-<rect x="352" y="98" width="140" height="64" rx="8" fill="#085041" stroke="#5DCAA5" stroke-width="0.5"/>
-<text x="422" y="118" text-anchor="middle" dominant-baseline="central" font-size="13" font-weight="500" fill="#9FE1CB" font-family="sans-serif">分割 + ByteTrack</text>
-<text x="422" y="140" text-anchor="middle" dominant-baseline="central" font-size="11" fill="#5DCAA5" font-family="sans-serif">掩码·轨迹ID 一次前向</text>
-<path d="M492 130 H506" fill="none" stroke="#888780" stroke-width="1.5" marker-end="url(#arrow3)"/>
-<rect x="508" y="98" width="140" height="64" rx="8" fill="#085041" stroke="#5DCAA5" stroke-width="0.5"/>
-<text x="578" y="118" text-anchor="middle" dominant-baseline="central" font-size="13" font-weight="500" fill="#9FE1CB" font-family="sans-serif">RANSAC 中心线</text>
-<text x="578" y="140" text-anchor="middle" dominant-baseline="central" font-size="11" fill="#5DCAA5" font-family="sans-serif">质量门控·倾角·EMA→JSONL</text>
-<text x="40" y="222" dominant-baseline="central" font-size="13" font-weight="500" fill="#FAC775" font-family="sans-serif">靶标跟踪 marker · 逐帧 + 30s FFT · MarkerCameraSession</text>
-<rect x="40" y="238" width="140" height="64" rx="8" fill="#633806" stroke="#EF9F27" stroke-width="0.5"/>
-<text x="110" y="258" text-anchor="middle" dominant-baseline="central" font-size="13" font-weight="500" fill="#FAC775" font-family="sans-serif">逐帧解码</text>
-<text x="110" y="280" text-anchor="middle" dominant-baseline="central" font-size="11" fill="#EF9F27" font-family="sans-serif">RTSP 全帧率</text>
-<path d="M180 270 H194" fill="none" stroke="#888780" stroke-width="1.5" marker-end="url(#arrow3)"/>
-<rect x="196" y="238" width="140" height="64" rx="8" fill="#633806" stroke="#EF9F27" stroke-width="0.5"/>
-<text x="266" y="258" text-anchor="middle" dominant-baseline="central" font-size="13" font-weight="500" fill="#FAC775" font-family="sans-serif">检测 + ByteTrack</text>
-<text x="266" y="280" text-anchor="middle" dominant-baseline="central" font-size="11" fill="#EF9F27" font-family="sans-serif">persist·TargetLock 锁定</text>
-<path d="M336 270 H350" fill="none" stroke="#888780" stroke-width="1.5" marker-end="url(#arrow3)"/>
-<rect x="352" y="238" width="140" height="64" rx="8" fill="#633806" stroke="#EF9F27" stroke-width="0.5"/>
-<text x="422" y="258" text-anchor="middle" dominant-baseline="central" font-size="13" font-weight="500" fill="#FAC775" font-family="sans-serif">λmin 选峰+亚像素</text>
-<text x="422" y="280" text-anchor="middle" dominant-baseline="central" font-size="11" fill="#EF9F27" font-family="sans-serif">锚点窗口·cornerSubPix</text>
-<path d="M492 270 H506" fill="none" stroke="#888780" stroke-width="1.5" marker-end="url(#arrow3)"/>
-<rect x="508" y="238" width="140" height="64" rx="8" fill="#633806" stroke="#EF9F27" stroke-width="0.5"/>
-<text x="578" y="258" text-anchor="middle" dominant-baseline="central" font-size="13" font-weight="500" fill="#FAC775" font-family="sans-serif">位移测量 mm</text>
-<text x="578" y="280" text-anchor="middle" dominant-baseline="central" font-size="11" fill="#EF9F27" font-family="sans-serif">mm/px 标定→JSONL</text>
-<path d="M578 302 V326" fill="none" stroke="#888780" stroke-width="1.5" marker-end="url(#arrow3)"/>
-<rect x="508" y="330" width="140" height="44" rx="8" fill="#412402" stroke="#BA7517" stroke-width="0.5"/>
-<text x="578" y="348" text-anchor="middle" dominant-baseline="central" font-size="13" font-weight="500" fill="#FAC775" font-family="sans-serif">30s FFT 主频</text>
-<text x="578" y="366" text-anchor="middle" dominant-baseline="central" font-size="11" fill="#EF9F27" font-family="sans-serif">SNR 门控→spectrum.jsonl</text>
+<rect x="0" y="0" width="840" height="716" fill="#2B2B28"/>
+<text x="40" y="34" dominant-baseline="central" font-size="15" font-weight="600" fill="#D3D1C7">进程内数据流水线（批推理基类 + 每摄像头会话类）</text>
+
+<!-- ===================== POLE COLUMN ===================== -->
+<text x="210" y="60" text-anchor="middle" dominant-baseline="central" font-size="13" font-weight="600" fill="#9FE1CB">立柱 pole · 每秒 1 帧 · PoleCameraSession</text>
+
+<rect x="40" y="74" width="340" height="44" rx="8" fill="#085041" stroke="#5DCAA5" stroke-width="0.5"/>
+<text x="210" y="92" text-anchor="middle" dominant-baseline="central" font-size="12.5" font-weight="500" fill="#9FE1CB">1fps 抽帧</text>
+<text x="210" y="108" text-anchor="middle" dominant-baseline="central" font-size="10.5" fill="#5DCAA5">grab+retrieve 保时序 · 模型预热后才抽帧</text>
+
+<rect x="40" y="126" width="340" height="44" rx="8" fill="#085041" stroke="#5DCAA5" stroke-width="0.5"/>
+<text x="210" y="144" text-anchor="middle" dominant-baseline="central" font-size="12.5" font-weight="500" fill="#9FE1CB">去畸变</text>
+<text x="210" y="160" text-anchor="middle" dominant-baseline="central" font-size="10.5" fill="#5DCAA5">本摄像头内联 K / dist（world_3d 用 R,t）</text>
+
+<rect x="40" y="178" width="340" height="44" rx="8" fill="#085041" stroke="#5DCAA5" stroke-width="0.5"/>
+<text x="210" y="196" text-anchor="middle" dominant-baseline="central" font-size="12.5" font-weight="500" fill="#9FE1CB">分割 + ByteTrack（一次前向）</text>
+<text x="210" y="212" text-anchor="middle" dominant-baseline="central" font-size="10.5" fill="#5DCAA5">掩码·轨迹ID · 模型一份跨摄像头攒批</text>
+
+<rect x="40" y="230" width="340" height="44" rx="8" fill="#085041" stroke="#5DCAA5" stroke-width="0.5"/>
+<text x="210" y="248" text-anchor="middle" dominant-baseline="central" font-size="12.5" font-weight="500" fill="#9FE1CB">持久 ID 锚点匹配</text>
+<text x="210" y="264" text-anchor="middle" dominant-baseline="central" font-size="10.5" fill="#5DCAA5">AnchorRegistry.assign · 遮挡换轨纠正</text>
+
+<!-- dual-path container -->
+<rect x="40" y="286" width="340" height="96" rx="8" fill="#063B30" stroke="#5DCAA5" stroke-width="0.5"/>
+<text x="210" y="300" text-anchor="middle" dominant-baseline="central" font-size="11" font-weight="500" fill="#9FE1CB">几何观测提取（双路径）</text>
+<rect x="52" y="308" width="150" height="64" rx="6" fill="#085041" stroke="#5DCAA5" stroke-width="0.4"/>
+<text x="127" y="326" text-anchor="middle" dominant-baseline="central" font-size="10.5" font-weight="500" fill="#9FE1CB">行中心线快路径</text>
+<text x="127" y="342" text-anchor="middle" dominant-baseline="central" font-size="9.5" fill="#5DCAA5">local_centerline</text>
+<text x="127" y="356" text-anchor="middle" dominant-baseline="central" font-size="9.5" fill="#5DCAA5">≥20点·~50ms</text>
+<rect x="218" y="308" width="150" height="64" rx="6" fill="#0A4338" stroke="#5DCAA5" stroke-width="0.4"/>
+<text x="293" y="326" text-anchor="middle" dominant-baseline="central" font-size="10.5" font-weight="500" fill="#9FE1CB">骨架回退</text>
+<text x="293" y="342" text-anchor="middle" dominant-baseline="central" font-size="9.5" fill="#5DCAA5">Zhang-Suen+行中点</text>
+<text x="293" y="356" text-anchor="middle" dominant-baseline="central" font-size="9.5" fill="#5DCAA5">最长路径BFS·~965ms</text>
+
+<rect x="40" y="392" width="340" height="44" rx="8" fill="#085041" stroke="#5DCAA5" stroke-width="0.5"/>
+<text x="210" y="410" text-anchor="middle" dominant-baseline="central" font-size="12.5" font-weight="500" fill="#9FE1CB">RANSAC 拟合杆轴 + 端点</text>
+<text x="210" y="426" text-anchor="middle" dominant-baseline="central" font-size="10.5" fill="#5DCAA5">质量评分(残余/稳定性) · EMA 跟随</text>
+
+<rect x="40" y="444" width="340" height="44" rx="8" fill="#712B13" stroke="#D85A30" stroke-width="0.5"/>
+<text x="210" y="462" text-anchor="middle" dominant-baseline="central" font-size="12.5" font-weight="500" fill="#F0997B">delta vs 基准 + EMA</text>
+<text x="210" y="478" text-anchor="middle" dominant-baseline="central" font-size="10.5" fill="#D85A30">→ measurements.jsonl · 倾角报警(内联落盘)</text>
+
+<!-- pole 报警内联旁路 → 留存 -->
+<path d="M210 488 V512" fill="none" stroke="#D85A30" stroke-width="1.4" stroke-dasharray="4 3" marker-end="url(#ar)"/>
+<text x="216" y="500" dominant-baseline="central" font-size="9" fill="#D85A30">alarm=True → 原始帧+重编码帧+manifest（不经 Recorder）</text>
+
+<!-- pole arrows -->
+<path d="M210 118 V126" fill="none" stroke="#888780" stroke-width="1.5" marker-end="url(#ar)"/>
+<path d="M210 170 V178" fill="none" stroke="#888780" stroke-width="1.5" marker-end="url(#ar)"/>
+<path d="M210 222 V230" fill="none" stroke="#888780" stroke-width="1.5" marker-end="url(#ar)"/>
+<path d="M210 274 V286" fill="none" stroke="#888780" stroke-width="1.5" marker-end="url(#ar)"/>
+<path d="M210 382 V392" fill="none" stroke="#888780" stroke-width="1.5" marker-end="url(#ar)"/>
+<path d="M210 436 V444" fill="none" stroke="#888780" stroke-width="1.5" marker-end="url(#ar)"/>
+
+<!-- ===================== MARKER COLUMN ===================== -->
+<text x="630" y="60" text-anchor="middle" dominant-baseline="central" font-size="13" font-weight="600" fill="#FAC775">靶标 marker · 逐帧 · MarkerCameraSession</text>
+
+<rect x="460" y="74" width="340" height="44" rx="8" fill="#633806" stroke="#EF9F27" stroke-width="0.5"/>
+<text x="630" y="92" text-anchor="middle" dominant-baseline="central" font-size="12.5" font-weight="500" fill="#FAC775">逐帧解码</text>
+<text x="630" y="108" text-anchor="middle" dominant-baseline="central" font-size="10.5" fill="#EF9F27">RTSP 全帧率 / 文件背压不丢</text>
+
+<rect x="460" y="126" width="340" height="44" rx="8" fill="#633806" stroke="#EF9F27" stroke-width="0.5"/>
+<text x="630" y="144" text-anchor="middle" dominant-baseline="central" font-size="12.5" font-weight="500" fill="#FAC775">检测 + ByteTrack（持续跟踪）</text>
+<text x="630" y="160" text-anchor="middle" dominant-baseline="central" font-size="10.5" fill="#EF9F27">persist·TargetLock · 模型一份攒批</text>
+
+<rect x="460" y="178" width="340" height="44" rx="8" fill="#633806" stroke="#EF9F27" stroke-width="0.5"/>
+<text x="630" y="196" text-anchor="middle" dominant-baseline="central" font-size="12.5" font-weight="500" fill="#FAC775">λmin 选峰 + 亚像素</text>
+<text x="630" y="212" text-anchor="middle" dominant-baseline="central" font-size="10.5" fill="#EF9F27">structure_sigma·min_lambda_min·cornerSubPix</text>
+
+<rect x="460" y="230" width="340" height="44" rx="8" fill="#633806" stroke="#EF9F27" stroke-width="0.5"/>
+<text x="630" y="248" text-anchor="middle" dominant-baseline="central" font-size="12.5" font-weight="500" fill="#FAC775">位移测量 mm/px</text>
+<text x="630" y="264" text-anchor="middle" dominant-baseline="central" font-size="10.5" fill="#EF9F27">外圈圆直径自标定 real_diameter_mm</text>
+
+<rect x="460" y="286" width="340" height="60" rx="8" fill="#412402" stroke="#BA7517" stroke-width="0.5"/>
+<text x="630" y="306" text-anchor="middle" dominant-baseline="central" font-size="12.5" font-weight="500" fill="#FAC775">→ displacement.jsonl</text>
+<text x="630" y="324" text-anchor="middle" dominant-baseline="central" font-size="10.5" fill="#EF9F27">cx/cy + ts；同时 put_blocking(spectrum_q)</text>
+
+<!-- marker arrows -->
+<path d="M630 118 V126" fill="none" stroke="#888780" stroke-width="1.5" marker-end="url(#ar)"/>
+<path d="M630 170 V178" fill="none" stroke="#888780" stroke-width="1.5" marker-end="url(#ar)"/>
+<path d="M630 222 V230" fill="none" stroke="#888780" stroke-width="1.5" marker-end="url(#ar)"/>
+<path d="M630 274 V286" fill="none" stroke="#888780" stroke-width="1.5" marker-end="url(#ar)"/>
+
+<!-- spectrum_q dashed link from marker box5 down to SpectrumAnalyzer -->
+<path d="M630 346 V470" fill="none" stroke="#EF9F27" stroke-width="1.4" stroke-dasharray="5 4" marker-end="url(#ar)"/>
+<text x="640" y="408" dominant-baseline="central" font-size="10" fill="#EF9F27">spectrum_q（位移时序样本）</text>
+
+<!-- ===================== SPECTRUM ANALYZER (independent process) ===================== -->
+<rect x="40" y="470" width="760" height="166" rx="10" fill="#3A2E5C" stroke="#AFA9EC" stroke-width="0.6"/>
+<text x="56" y="490" dominant-baseline="central" font-size="13" font-weight="600" fill="#CECBF6">SpectrumAnalyzer — 独立进程（消费 spectrum_q，不属任一推理进程）</text>
+<text x="56" y="512" dominant-baseline="central" font-size="11" fill="#B4B2A9">30s 固定不重叠窗 → 按 (cam_id, pid) 取 dx/dy 双轴做 FFT</text>
+<text x="56" y="532" dominant-baseline="central" font-size="11" fill="#B4B2A9">SNR≥5 门控（取 SNR 更高轴）→ spectrum.jsonl（dash 取 dy）→ 主频 f1_hz → 大屏</text>
+<text x="56" y="552" dominant-baseline="central" font-size="10" fill="#7E7C75">源总长不足 30s 时按 min(min_span_s, window_s) 判，flush 用全部数据出图（不会永远未满窗）</text>
+<line x1="56" y1="568" x2="784" y2="568" stroke="#5A5280" stroke-width="0.8"/>
+<text x="56" y="586" dominant-baseline="central" font-size="11.5" font-weight="600" fill="#FFD479">振动报警三类触发（阈值 &gt;0 启用 · 任一命中即留存 · 同窗共享 analysis 与视频片段）</text>
+<text x="56" y="606" dominant-baseline="central" font-size="10.5" fill="#8FE8EC">振幅(真实) ≥ amplitude_mm(默认5.0)</text>
+<text x="300" y="606" dominant-baseline="central" font-size="10.5" fill="#DCC6FF">索力(占位) ≥ cable_force_idx</text>
+<text x="540" y="606" dominant-baseline="central" font-size="10.5" fill="#FFE7AC">挠度(占位) ≥ deflection_mm</text>
+<text x="56" y="626" dominant-baseline="central" font-size="9.5" fill="#9A988F">→ emit amplitude/deflection/cable_force_alarm（各自独立 id）→ events.jsonl；RTSP 经 clip_q 滚动切窗 · 文件源收尾 ffmpeg -c copy（详见 ⑥ 报警逻辑架构图）</text>
+
+<!-- outputs note -->
+<rect x="40" y="652" width="760" height="52" rx="8" fill="#3A3A37" stroke="#888780" stroke-width="0.5"/>
+<text x="56" y="672" dominant-baseline="central" font-size="11" fill="#D3D1C7">产物（均由 Recorder 落盘）：pole → measurements.jsonl ｜ marker → displacement.jsonl + spectrum.jsonl</text>
+<text x="56" y="692" dominant-baseline="central" font-size="10" fill="#B4B2A9">报警留存 → events.jsonl + output/vibration/&lt;id&gt;.json 侧车 + 视频片段（RTSP 滚动缓冲 output/rtsp_buffer/&lt;cam&gt;/seg_*.mp4）</text>
 </svg>
