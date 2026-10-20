@@ -35,7 +35,7 @@ class BatchInferenceBase:
 
     def _predict_kwargs(self) -> dict:
         return dict(conf=self.conf, classes=[self.cls_id],
-                    device=self.device, verbose=False)
+                    device=self.device, verbose=False, rect=True)
 
     def predict(self, frames):
         """批量前向；list 输入失败时自动退化为逐帧前向（模型仍只加载一份）。"""

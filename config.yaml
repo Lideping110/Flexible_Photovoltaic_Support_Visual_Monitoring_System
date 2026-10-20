@@ -46,17 +46,17 @@ cameras:
 
   - id: marker_cam_01
     # RTSP 实时流（现场部署真实地址，已实测沙箱可直连）：
-    url: "rtsp://admin:hhjt110110@192.168.1.65:554/streaming/Channels/101"
+    # url: "rtsp://admin:hhjt110110@192.168.1.65:554/streaming/Channels/101"
     # 联调测试用的本地视频文件（改回此行即可恢复离线回放）：
-    # url: "babiao/fast_move_shorter.mp4"
+    url: "babiao/fast_move_shorter.mp4"
     task: marker                    # marker = 靶标跟踪（检测模型，逐帧 + 30s FFT）
     # 注意：marker 在原始（未畸变）像素空间做亚像素定位，mm/px 由靶标外圈圆
     # 直径自标定（见 marker.calibration），不需要相机内参/外参（K/dist/R/t），
     # 也不做去畸变——请勿在此挂 calibration 块，否则只会误导、不被加载。
     
   - id: marker_cam_02
-    url: "rtsp://admin:hhjt110110@192.168.1.64:554/streaming/Channels/101"
-    # url: "babiao/static_video.mp4"
+    # url: "rtsp://admin:hhjt110110@192.168.1.64:554/streaming/Channels/101"
+    url: "babiao/static_video.mp4"
     task: marker
 # ---------------------------------------------------------------------
 # 模型（每个分支只加载一份，跨摄像头攒批推理）
@@ -203,6 +203,7 @@ runtime:
     reconnect_s: 5                  # RTSP 断线重连间隔（秒）
     rtsp_low_latency: true          # TCP + nobuffer 低延迟拉流
     rtsp_rolling_s: 120             # RTSP 实时流滚动缓冲时长（秒）：振动报警时由 capture 从中切窗
+                                    # 出现报警的时候，会从120s内取数据，然后滚动 cut(t0, t1, out_path)
     rtsp_seg_s: 10                  # 滚动缓冲分段时长（秒/段），落盘 output/rtsp_buffer/<cam_id>/
 
   batch:
