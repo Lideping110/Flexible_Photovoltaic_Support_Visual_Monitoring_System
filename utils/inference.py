@@ -22,7 +22,8 @@ class BatchInferenceBase:
     （如分割模型的 retina_masks）。模型仍只加载一份。
     """
 
-    def __init__(self, weights, conf, cls_id, device, tracker_name, tag):
+    def __init__(self, weights, conf, cls_id, device, tracker_name, tag,
+                 iou=0.7):
         from ultralytics import YOLO
 
         self.model = YOLO(str(weights))
@@ -31,10 +32,13 @@ class BatchInferenceBase:
         self.device = device
         self.tracker_name = tracker_name
         self.tag = tag
+        # NMS IoU 留在推理层统一传：不传时 ultralytics 用 0.7，对本项目靶标模型
+        # 会漏压重复框。默认 0.7 保持旧行为，调用方按需从 config 覆盖。
+        self.iou = float(iou)
         self._batch_ok = True
 
     def _predict_kwargs(self) -> dict:
-        return dict(conf=self.conf, classes=[self.cls_id],
+        return dict(conf=self.conf, iou=self.iou, classes=[self.cls_id],
                     device=self.device, verbose=False, rect=True)
 
     def predict(self, frames):

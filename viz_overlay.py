@@ -7,7 +7,8 @@
 
 特性：
 - 自动从 config.yaml 发现 pole / marker 摄像头及其源视频与标定。
-- pole(image_relative) 分支渲染前对每帧做同参数去畸变，保证 box 严丝合缝。
+- pole(image_relative) 分支按 cameras[].undistort 决定是否对每帧去畸变，保证
+  box/top/bottom 与画面严丝合缝。
 - marker 分支直接叠原始帧。
 - 产物：<output_dir>/viz/<cam_id>_annotated.mp4
          <output_dir>/viz/frames/<cam_id>/frame_XXXXXX.jpg（视觉 QA）
@@ -16,6 +17,7 @@
 import argparse
 from pathlib import Path
 
+from utils.config import camera_undistort
 from viz.config_io import load_viz_config
 from viz.export import export_cam_video
 from viz.render import load_init_baselines, render_baseline_image
@@ -23,6 +25,8 @@ from viz.render import load_init_baselines, render_baseline_image
 
 def _run_cam(cam, output_dir, pole_mode, dump_frames):
     branch = cam["task"]
+    undistort = (camera_undistort(cam, pole_mode, "viz")
+                 if branch == "pole" else False)
     out_dir = Path(output_dir) / "viz"
     stats = export_cam_video(cam, output_dir, pole_mode, out_dir,
                              dump_frames=dump_frames)
@@ -37,7 +41,7 @@ def _run_cam(cam, output_dir, pole_mode, dump_frames):
             bl_path = out_dir / f"{cam['id']}_baseline_frame_{baseline_frame_id}.jpg"
             saved = render_baseline_image(
                 Path(cam["url"]), branch, cam.get("calibration"), baselines,
-                bl_path, frame_id=baseline_frame_id)
+                bl_path, frame_id=baseline_frame_id, undistort=undistort)
             if saved:
                 stats["baseline_image"] = saved
             # 同步统一渲染到持久化的 init_frame.jpg：用 init_state 的全部基线
@@ -46,7 +50,7 @@ def _run_cam(cam, output_dir, pole_mode, dump_frames):
                          / "init" / "init_frame.jpg")
             saved_init = render_baseline_image(
                 Path(cam["url"]), branch, cam.get("calibration"), baselines,
-                init_path, frame_id=baseline_frame_id)
+                init_path, frame_id=baseline_frame_id, undistort=undistort)
             if saved_init:
                 stats["init_frame_unified"] = saved_init
     return stats

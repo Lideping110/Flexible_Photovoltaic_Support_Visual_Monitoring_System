@@ -280,10 +280,11 @@ def load_init_baselines(output_dir, cam_id):
 
 
 def render_baseline_image(src_path, branch, calibration, baselines, out_path,
-                          frame_id=0):
+                          frame_id=0, undistort=True):
     """生成基线参考图——对齐摄像头拉流 main.save_relative_baseline_images。
 
-    回读代表帧（默认 frame_id=0，即首有效帧）、去畸变，把各杆中位基线
+    回读代表帧（默认 frame_id=0，即首有效帧），按 undistort 决定是否去畸变，
+    把各杆中位基线
     （top→bottom）以调色板色绘制，并标注杆号/角度/质量/代表帧号。
     仅 pole 分支有意义；无基线则返回 None。
     """
@@ -298,7 +299,7 @@ def render_baseline_image(src_path, branch, calibration, baselines, out_path,
     if not ok or image is None:
         return None
 
-    if calibration:
+    if undistort and calibration:
         und = _make_undistort(calibration)
         if und is not None:
             image = und(image)

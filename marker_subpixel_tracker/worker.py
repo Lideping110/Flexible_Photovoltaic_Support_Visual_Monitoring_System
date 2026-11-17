@@ -211,6 +211,7 @@ def run_marker_inference(cfg: dict, cameras: list, frame_queues: dict, result_q,
         weights, model_cfg.get("confidence", 0.25),
         model_cfg.get("class_id", 0), model_cfg.get("device", "intel:gpu"),
         model_cfg.get("tracker", "bytetrack.yaml"), tag,
+        iou=model_cfg.get("iou", 0.7),
     )
 
     # 预热模型：把首帧冷启动移出采集关键路径，完成后置位就绪事件，

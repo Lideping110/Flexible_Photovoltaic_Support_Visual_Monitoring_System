@@ -1588,6 +1588,17 @@ HTML_TEMPLATE = r"""<!DOCTYPE html>
   .wininfo { color:#3fb950; font-size:11px; margin-left:6px; }
   /* 占位标记：挠度/索力尚无物理模型，界面显示占位值，明确标注避免被当成实测值 */
   .ph { color:#d29922; font-size:10px; font-weight:400; margin-left:4px; }
+  /* 左右面板显示开关（h2 需 flex 让开关靠右） */
+  .panel > h2 { display:flex; align-items:center; }
+  .ptgl { margin-left:auto; display:inline-flex; align-items:center; gap:7px;
+    cursor:pointer; font-size:11px; color:#7d8794; user-select:none; flex:none; }
+  .ptgl input { display:none; }
+  .ptgl .tk { width:34px; height:18px; border-radius:9px; background:#1c2430;
+    position:relative; transition:background .15s; flex:none; }
+  .ptgl .tk::after { content:""; position:absolute; top:2px; left:2px; width:14px;
+    height:14px; border-radius:50%; background:#7d8794; transition:left .15s, background .15s; }
+  .ptgl input:checked + .tk { background:#1f6f43; }
+  .ptgl input:checked + .tk::after { left:18px; background:#7ee787; }
 </style>
 </head>
 <body>
@@ -1598,7 +1609,7 @@ HTML_TEMPLATE = r"""<!DOCTYPE html>
 <div class="grid">
   <!-- 左：立柱倾角监测 -->
   <div class="panel" id="polePanel">
-    <h2>◧ 立柱倾角监测　<span id="poleStatus" class="badge"></span></h2>
+    <h2>◧ 立柱倾角监测　<span id="poleStatus" class="badge"></span><label class="ptgl" title="关闭后隐藏本侧立柱监测面板"><input type="checkbox" id="poleShowTgl" checked><span class="tk"></span><span>显示</span></label></h2>
     <div class="viewbar">
       <button class="vbtn active" data-panel="pole" data-view="init">初始状态画面</button>
       <button class="vbtn" data-panel="pole" data-view="live">实时展示画面</button>
@@ -1625,7 +1636,7 @@ HTML_TEMPLATE = r"""<!DOCTYPE html>
   </div>
   <!-- 右：视频测振 -->
   <div class="panel" id="markerPanel">
-    <h2>◨ 视频测振　<span id="markerStatus" class="badge"></span></h2>
+    <h2>◨ 视频测振　<span id="markerStatus" class="badge"></span><label class="ptgl" title="关闭后隐藏本侧视频测振面板"><input type="checkbox" id="markerShowTgl" checked><span class="tk"></span><span>显示</span></label></h2>
     <div class="viewbar">
       <button class="vbtn active" data-panel="marker" data-view="init">初始状态画面</button>
       <button class="vbtn" data-panel="marker" data-view="live">实时分析界面</button>
@@ -2268,7 +2279,50 @@ async function tick(){
     }
   }
 }
+// 左右面板显示开关：关闭隐藏该侧面板；仅剩一侧时独占整行。状态持久化
+// （localStorage 不可用时降级为内存存储，如隐私模式/无 DOM 沙箱）。
+// 隐藏侧的文件视频暂停，避免后台空播。
+function panelToggleStore(){
+  try{
+    const s=window.localStorage;
+    s.setItem("__ptgl_t","1"); s.removeItem("__ptgl_t");
+    return s;
+  }catch(e){
+    const m={};
+    return {getItem:k=>(k in m?m[k]:null), setItem:(k,v)=>{m[k]=String(v);},
+            removeItem:k=>{delete m[k];}};
+  }
+}
+function setupPanelToggles(){
+  const grid=document.querySelector(".grid");
+  if(!grid) return;
+  const store=panelToggleStore();
+  function apply(){
+    const poleOn=document.getElementById("poleShowTgl").checked;
+    const markOn=document.getElementById("markerShowTgl").checked;
+    document.getElementById("polePanel").style.display = poleOn ? "" : "none";
+    document.getElementById("markerPanel").style.display = markOn ? "" : "none";
+    grid.style.gridTemplateColumns = (poleOn && markOn) ? "1fr 1fr" : "1fr";
+    store.setItem("poleShow", poleOn ? "1" : "0");
+    store.setItem("markerShow", markOn ? "1" : "0");
+    if(!poleOn){ const v=document.querySelector("#poleLiveMedia video"); if(v && v.pause) v.pause(); }
+    if(!markOn){ const v=document.querySelector("#markerLiveMedia video"); if(v && v.pause) v.pause(); }
+  }
+  const pt=document.getElementById("poleShowTgl");
+  const mt=document.getElementById("markerShowTgl");
+  if(pt){
+    pt.checked = store.getItem("poleShow") !== "0";
+    pt.addEventListener("change", apply);
+  }
+  if(mt){
+    mt.checked = store.getItem("markerShow") !== "0";
+    mt.addEventListener("change", apply);
+  }
+  apply();
+}
+
 setupViewSwitch();
+setupPanelToggles();
 setInterval(tick, 1000); tick();
 </script>
 </body>

@@ -19112,7 +19112,7 @@
 		</conversion_parameters>
 		<model_info>
 			<iou_threshold value="0.7" />
-			<labels value="babiao" />
+			<labels value="marker" />
 			<model_type value="YOLO" />
 			<pad_value value="114" />
 			<resize_type value="fit_to_window_letterbox" />

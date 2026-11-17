@@ -1,0 +1,660 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>四门控频率分析 · 柔性光伏支架索力监测</title>
+<style>
+  :root{
+    --bg:#f5f7fa; --card:#ffffff; --line:#e3e7ee; --line2:#eef1f6;
+    --tx:#1c2430; --tx2:#5d6878; --tx3:#8b95a5;
+    --blue:#2f6feb; --blue-bg:#eaf1ff; --green:#0f8a5f; --green-bg:#e8f7f0;
+    --red:#d04a4a; --red-bg:#fdeeee; --amber:#b7791f; --amber-bg:#fff5e2;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--tx);
+       font:13px/1.6 -apple-system,BlinkMacSystemFont,"Segoe UI","Microsoft YaHei",sans-serif}
+  header{padding:14px 22px;background:var(--card);border-bottom:1px solid var(--line)}
+  header h1{margin:0;font-size:17px;font-weight:600}
+  header p{margin:3px 0 0;color:var(--tx2);font-size:12px}
+  .layout{display:flex;gap:16px;padding:16px;align-items:flex-start}
+  .panel{width:350px;flex:0 0 350px;background:var(--card);border:1px solid var(--line);
+         border-radius:10px;padding:16px;max-height:calc(100vh - 100px);overflow:auto}
+  main{flex:1;min-width:0;display:flex;flex-direction:column;gap:14px}
+  .card{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:14px 16px}
+  .card h2{margin:0 0 10px;font-size:14px;font-weight:600}
+  .card h2 small{font-weight:400;color:var(--tx3);margin-left:8px;font-size:12px}
+  fieldset{border:none;border-top:1px solid var(--line2);margin:14px 0 0;padding:12px 0 0}
+  legend{padding:0 8px 0 0;font-size:12px;font-weight:600;color:var(--blue)}
+  .row{display:flex;align-items:center;gap:8px;margin:7px 0}
+  .row label{flex:1;color:var(--tx2);font-size:12px}
+  .row .hint{color:var(--tx3);font-size:11px}
+  input[type=number],input[type=text],select{width:112px;padding:5px 7px;border:1px solid var(--line);
+      border-radius:6px;background:#fff;color:var(--tx);font-size:12px;font-family:inherit}
+  input[type=file]{width:100%;font-size:12px}
+  select{width:100%}
+  .btn{display:inline-block;padding:7px 13px;border:1px solid var(--blue);border-radius:6px;
+       background:var(--blue);color:#fff;font-size:12px;cursor:pointer;font-family:inherit}
+  .btn:hover{filter:brightness(1.07)}
+  .btn.sec{background:#fff;color:var(--blue)}
+  .btn.ghost{background:#fff;color:var(--tx2);border-color:var(--line)}
+  .btn:disabled{opacity:.55;cursor:not-allowed}
+  .btns{display:flex;gap:8px;margin-top:12px;flex-wrap:wrap}
+  .msg{margin-top:10px;font-size:12px;color:var(--tx2);min-height:18px}
+  .msg.err{color:var(--red)}
+  .cards{display:grid;grid-template-columns:repeat(4,1fr);gap:12px}
+  .kpi{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:12px 14px}
+  .kpi .k{font-size:11px;color:var(--tx3)}
+  .kpi .v{font-size:20px;font-weight:600;margin-top:3px;line-height:1.3}
+  .kpi .s{font-size:11px;color:var(--tx2);margin-top:2px}
+  .concl{padding:10px 14px;border-radius:8px;font-size:13px;border:1px solid transparent}
+  .concl.bad{background:var(--amber-bg);border-color:#f0d9a8;color:#8a5d10}
+  .concl.good{background:var(--green-bg);border-color:#bfe7d3;color:#0b6b49}
+  canvas{width:100%;height:230px;display:block}
+  #spectrum{height:250px}
+  .chart-note{font-size:11px;color:var(--tx3);margin-top:6px}
+  .wrap{overflow-x:auto}
+  table{border-collapse:collapse;width:100%;font-size:12px;white-space:nowrap}
+  th,td{padding:6px 8px;border-bottom:1px solid var(--line2);text-align:right}
+  th{background:#fafbfd;color:var(--tx2);font-weight:500;position:sticky;top:0}
+  th:first-child,td:first-child{text-align:left}
+  tbody tr{cursor:pointer}
+  tbody tr:hover{background:#f6f9ff}
+  tbody tr.sel{background:var(--blue-bg)}
+  .tag{display:inline-block;padding:1px 6px;border-radius:4px;font-size:11px;font-weight:600}
+  .tag.pass{background:var(--green-bg);color:var(--green)}
+  .tag.fail{background:var(--red-bg);color:var(--red)}
+  .tag.skip{background:#f1f3f7;color:var(--tx3)}
+  .tag.valid{background:var(--green-bg);color:var(--green)}
+  .tag.invalid{background:var(--red-bg);color:var(--red)}
+  .peaks{display:flex;flex-wrap:wrap;gap:8px}
+  .chip{background:#f7f9fc;border:1px solid var(--line);border-radius:6px;padding:5px 9px;font-size:12px}
+  .chip b{color:var(--blue)}
+  .meta{font-size:11px;color:var(--tx3);margin-top:4px}
+  .calibbar{display:flex;gap:16px;align-items:center;justify-content:space-between;
+      margin:12px 16px 0;padding:10px 14px;background:var(--card);
+      border:1px solid var(--line);border-radius:10px;font-size:12px}
+  .calibbar .cinfo{flex:1;min-width:0}
+  .calibbar .cinfo b{font-weight:600}
+  .calibbar .cwarn{color:var(--amber);margin-top:3px;line-height:1.5}
+  .calibbar .cact{display:flex;gap:8px;align-items:center;flex-shrink:0}
+  .calibbar input[type=file]{width:200px;font-size:11px}
+  .badge{display:inline-block;padding:1px 7px;border-radius:4px;font-size:11px;margin-left:6px}
+  .badge.ok{background:var(--green-bg);color:var(--green)}
+  .badge.warn{background:var(--amber-bg);color:var(--amber)}
+  .badge.dirty{background:var(--red-bg);color:var(--red)}
+  @media (max-width:1050px){.layout{flex-direction:column}.panel{width:100%;flex:none;max-height:none}.cards{grid-template-columns:repeat(2,1fr)}.calibbar{flex-direction:column;align-items:flex-start}}
+</style>
+</head>
+<body>
+<header>
+  <h1>四门控频率分析 · 柔性光伏支架索力监测</h1>
+  <p>G0 幅度 / G1 显著性 / G2 稳定性 / G3 频率下限 — 只有四门全过（VALID）才刷新索力；INVALID 保持上次 VALID 并标时效</p>
+</header>
+
+<div class="calibbar">
+  <div class="cinfo">
+    <b>参数来源</b>：<span id="calibSummary">未加载标定 · 使用内置默认值</span><span id="calibBadge"></span>
+    <div class="cwarn" id="calibWarn"></div>
+  </div>
+  <div class="cact">
+    <input type="file" id="calibFile" accept=".json,application/json">
+    <button class="btn sec" id="loadCalibFile">载入标定文件</button>
+    <button class="btn ghost" id="reloadServerCalib">恢复服务默认</button>
+  </div>
+</div>
+
+<div class="layout">
+  <aside class="panel">
+    <div class="row" style="display:block">
+      <label style="display:block;margin-bottom:5px">① 上传数据（csv / txt，UTF-8）</label>
+      <input type="file" id="file" accept=".csv,.txt,.tsv">
+    </div>
+    <div class="row">
+      <select id="sample"><option value="">— 或载入目录内示例 —</option></select>
+      <button class="btn sec" id="loadSample">载入</button>
+    </div>
+    <div class="row" style="display:block;margin-top:10px">
+      <label style="display:block;margin-bottom:5px">② 选择数据轴</label>
+      <select id="axis"><option value="">（先上传文件）</option></select>
+    </div>
+
+    <fieldset><legend>分窗与采样</legend>
+      <div class="row"><label>窗长 window_s <span class="hint">s</span></label><input type="number" id="window_s" step="1"></div>
+      <div class="row"><label>采样率 fs <span class="hint">0=自动</span></label><input type="number" id="fs" step="any"></div>
+      <div class="row"><label>单位换算 <span class="hint">0=自动</span></label><input type="number" id="unit_scale" step="any"></div>
+      <div class="row"><label>每窗去趋势</label><input type="checkbox" id="detrend" style="width:auto"></div>
+      <div class="row"><label>最少样本数</label><input type="number" id="min_samples" step="1"></div>
+      <div class="row"><label>最小跨度 <span class="hint">s</span></label><input type="number" id="min_span_s" step="any"></div>
+    </fieldset>
+
+    <fieldset><legend>预处理（AZV 吸收）</legend>
+      <div class="row"><label>去尖峰 <span class="hint">中值+MAD</span></label><input type="checkbox" id="despike" style="width:auto"></div>
+      <div class="row"><label>去尖峰窗口 <span class="hint">点</span></label><input type="number" id="spike_win" step="1"></div>
+      <div class="row"><label>去尖峰 σ 倍数</label><input type="number" id="spike_nsig" step="any"></div>
+      <div class="row"><label>高通截止 <span class="hint">Hz，0=关</span></label><input type="number" id="hp_cutoff" step="any"></div>
+      <div class="row"><label>f1 亚格点插值</label><input type="checkbox" id="refine_f1" style="width:auto"></div>
+    </fieldset>
+
+    <fieldset><legend>G0 幅度门</legend>
+      <div class="row"><label>本底 RMS <span class="hint">0=自动</span></label><input type="number" id="noise_floor_mg" step="any"></div>
+      <div class="row"><label>倍数 <span class="hint">RMS ≥ k×本底</span></label><input type="number" id="g0_rms_factor" step="0.1"></div>
+    </fieldset>
+
+    <fieldset><legend>G1 Welch 显著性门</legend>
+      <div class="row"><label>峰/中位数 ≥</label><input type="number" id="g1_peak_ratio" step="any"></div>
+      <div class="row"><label>分析带下限 <span class="hint">Hz</span></label><input type="number" id="f_lo" step="any"></div>
+      <div class="row"><label>分析带上限 <span class="hint">Hz</span></label><input type="number" id="f_hi" step="any"></div>
+      <div class="row"><label>Welch 段长 <span class="hint">s</span></label><input type="number" id="nperseg_s" step="any"></div>
+    </fieldset>
+
+    <fieldset><legend>G2 稳定性门</legend>
+      <div class="row"><label>模式 <span class="hint">band=带内验峰</span></label>
+        <select id="g2_mode" style="width:auto">
+          <option value="band">band 带内验峰（推荐）</option>
+          <option value="full">full 全带 argmax（旧）</option>
+        </select></div>
+      <div class="row"><label>子窗数</label><input type="number" id="n_sub" step="1"></div>
+      <div class="row"><label>CV 上限 <span class="hint">%</span></label><input type="number" id="g2_cv_max" step="any"></div>
+      <div class="row"><label>搜索带 <span class="hint">f0±比例</span></label><input type="number" id="g2_band_frac" step="any"></div>
+      <div class="row"><label>子窗峰 ≥ <span class="hint">×子窗中位</span></label><input type="number" id="g2_sub_ratio" step="any"></div>
+      <div class="row"><label>最少有效子窗</label><input type="number" id="g2_min_subs" step="1"></div>
+    </fieldset>
+
+    <fieldset><legend>多轴同频确认（软确认）</legend>
+      <div class="row"><label>启用 <span class="hint">不否决 VALID</span></label><input type="checkbox" id="multi_axis" style="width:auto"></div>
+      <div class="row"><label>搜索带 <span class="hint">f1±比例</span></label><input type="number" id="ma_band_frac" step="any"></div>
+      <div class="row"><label>他轴峰 ≥ <span class="hint">×他轴中位</span></label><input type="number" id="ma_ratio" step="any"></div>
+    </fieldset>
+
+    <fieldset><legend>证据输出</legend>
+      <div class="row"><label>谐波族检查 <span class="hint">2f1/3f1</span></label><input type="checkbox" id="harmonic_check" style="width:auto"></div>
+      <div class="row"><label>谐波峰 ≥</label><input type="number" id="harm_ratio" step="any"></div>
+      <div class="row"><label>过零+Hilbert 验证</label><input type="checkbox" id="xcheck" style="width:auto"></div>
+    </fieldset>
+
+    <fieldset><legend>G3 频率下限门</legend>
+      <div class="row"><label>倍数 <span class="hint">f1 &gt; k/T</span></label><input type="number" id="g3_factor" step="any"></div>
+      <div class="row"><label>绝对下限 <span class="hint">Hz</span></label><input type="number" id="f1_min_hz" step="any"></div>
+    </fieldset>
+
+    <fieldset><legend>输出与索力</legend>
+      <div class="row"><label>显著峰个数</label><input type="number" id="n_peaks" step="1"></div>
+      <div class="row"><label>峰/中位数 ≥</label><input type="number" id="peak_min_ratio" step="any"></div>
+      <div class="row"><label>基准频率 f1_ref <span class="hint">Hz</span></label><input type="number" id="f1_ref_hz" step="any"></div>
+      <div class="row"><label>跨长 L <span class="hint">m，需标定</span></label><input type="number" id="L_m" step="any"></div>
+      <div class="row"><label>线密度 μ <span class="hint">kg/m，需标定</span></label><input type="number" id="mu_kg_m" step="any"></div>
+    </fieldset>
+
+    <div class="btns">
+      <button class="btn" id="run">开始分析</button>
+      <button class="btn ghost" id="reset">重置参数</button>
+    </div>
+    <div class="msg" id="msg">等待载入数据…</div>
+  </aside>
+
+  <main>
+    <div class="cards">
+      <div class="kpi"><div class="k">VALID 窗口</div><div class="v" id="kValid">—</div><div class="s" id="kValidSub">—</div></div>
+      <div class="kpi"><div class="k">当前状态</div><div class="v" id="kState">—</div><div class="s" id="kStateSub">—</div></div>
+      <div class="kpi"><div class="k">当前窗主频 f1</div><div class="v" id="kF1">—</div><div class="s" id="kF1Sub">—</div></div>
+      <div class="kpi"><div class="k">索力（状态量）</div><div class="v" id="kCable">—</div><div class="s" id="kCableSub">—</div></div>
+    </div>
+
+    <div class="concl bad" id="concl">尚未分析。载入数据并点击「开始分析」。</div>
+
+    <div class="card">
+      <h2>原始时程曲线 <small id="curveTitle">—</small></h2>
+      <canvas id="curve"></canvas>
+      <div class="chart-note">竖线为固定不重叠窗口边界；浅蓝底为当前选中窗。点击表格行或曲线可切换窗口。</div>
+    </div>
+
+    <div class="card">
+      <h2>Welch 功率谱 <small id="specTitle">—</small></h2>
+      <canvas id="spectrum"></canvas>
+      <div class="chart-note">灰色遮罩为分析带外；红实线为主频 f1，圆点为各阶显著峰。纵轴为 log10(PSD) 相对值。</div>
+    </div>
+
+    <div class="card">
+      <h2>逐窗四门明细 <small>点击行切换上方频谱</small></h2>
+      <div class="wrap"><table id="tbl"><thead><tr>
+        <th>窗</th><th>区间 s</th><th>n</th><th>RMS</th><th>G0阈值</th><th>G0</th>
+        <th>峰/底</th><th>G1</th><th>子窗主频 Hz</th><th>CV%</th><th>G2</th>
+        <th>f1 Hz</th><th>k/T</th><th>G3</th><th>判定</th><th>多轴确认</th><th>索力指数</th>
+      </tr></thead><tbody></tbody></table></div>
+    </div>
+
+    <div class="card">
+      <h2>当前窗显著峰 / 各阶频率 <small id="peakTitle">—</small></h2>
+      <div class="peaks" id="peaks"><span class="meta">尚未分析</span></div>
+      <div class="meta" id="confirmBox" style="margin-top:10px"></div>
+      <div class="meta" id="meta"></div>
+    </div>
+  </main>
+</div>
+
+<script>
+"use strict";
+const $ = id => document.getElementById(id);
+const S = {content:"", filename:"", result:null, sel:0, defaults:null,
+           calib:null, calibDoc:null, dirty:false};
+
+function msg(t, err){ $("msg").textContent = t; $("msg").className = "msg" + (err ? " err" : ""); }
+function tag(ok, txt){ return `<span class="tag ${ok?"pass":"fail"}">${txt||(ok?"PASS":"FAIL")}</span>`; }
+function num(id){ const v = parseFloat($(id).value); return isNaN(v) ? 0 : v; }
+
+async function post(path, body){
+  const r = await fetch(path, {method:"POST", headers:{"Content-Type":"application/json"},
+                               body:JSON.stringify(body)});
+  const j = await r.json();
+  if(!r.ok) throw new Error(j.error || ("HTTP " + r.status));
+  return j;
+}
+
+function setBadge(txt, cls){
+  const b=$("calibBadge"); b.textContent=txt; b.className="badge "+(cls||"");
+}
+
+function renderCalib(meta){
+  if(!meta){
+    $("calibSummary").textContent="未加载标定 · 使用内置 DEFAULTS";
+    setBadge("未标定","warn");
+    $("calibWarn").textContent="建议先运行 calibrate_accel.py 生成 accel_calib.json";
+    return;
+  }
+  const s=meta.sensor||{};
+  $("calibSummary").textContent =
+    `${s.id||"?"} / ${s.model||"?"} · ±${s.range_g??"?"}g @ ${s.rate_hz??"?"}Hz · `+
+    `本底 ${meta.noise_floor_mg??"?"}mg · 标定 ${meta.calibrated_on||"?"} · `+
+    `有效至 ${meta.valid_until||"?"}`;
+  const pending=(meta.site_pending||[]).length;
+  setBadge(pending?"L3 未标定":"已标定", pending?"warn":"ok");
+  $("calibWarn").textContent=[...(meta.warnings||[]),
+                              ...(meta.runtime_warnings||[])].join(" ｜ ");
+}
+
+function renderDirty(){
+  if(!S.calib && !S.calibDoc) return;
+  if(S.dirty) setBadge("参数已偏离标定","dirty");
+  else renderCalib(S.calib);
+}
+
+function fillForm(d){
+  const pct = v => (v*100).toFixed(3).replace(/\.?0+$/,"");
+  $("window_s").value=d.window_s; $("fs").value=d.fs; $("unit_scale").value=d.unit_scale;
+  $("detrend").checked=!!d.detrend; $("min_samples").value=d.min_samples; $("min_span_s").value=d.min_span_s;
+  $("noise_floor_mg").value=d.noise_floor_mg; $("g0_rms_factor").value=d.g0_rms_factor;
+  $("g1_peak_ratio").value=d.g1_peak_ratio; $("f_lo").value=d.f_lo; $("f_hi").value=d.f_hi;
+  $("nperseg_s").value=d.nperseg_s; $("n_sub").value=d.n_sub; $("g2_cv_max").value=pct(d.g2_cv_max);
+  $("g3_factor").value=d.g3_factor; $("f1_min_hz").value=d.f1_min_hz;
+  $("n_peaks").value=d.n_peaks; $("peak_min_ratio").value=d.peak_min_ratio;
+  $("f1_ref_hz").value=d.f1_ref_hz; $("L_m").value=d.L_m; $("mu_kg_m").value=d.mu_kg_m;
+  $("despike").checked=!!d.despike; $("spike_win").value=d.spike_win; $("spike_nsig").value=d.spike_nsig;
+  $("hp_cutoff").value=d.hp_cutoff; $("refine_f1").checked=!!d.refine_f1;
+  $("g2_mode").value=(d.g2_mode==="full")?"full":"band";
+  $("g2_band_frac").value=d.g2_band_frac; $("g2_sub_ratio").value=d.g2_sub_ratio;
+  $("g2_min_subs").value=d.g2_min_subs;
+  $("multi_axis").checked=!!d.multi_axis; $("ma_band_frac").value=d.ma_band_frac; $("ma_ratio").value=d.ma_ratio;
+  $("harmonic_check").checked=!!d.harmonic_check; $("harm_ratio").value=d.harm_ratio;
+  $("xcheck").checked=!!d.xcheck;
+}
+
+function collect(){
+  const p = {
+    window_s:num("window_s"), fs:num("fs"), unit_scale:num("unit_scale"),
+    detrend:$("detrend").checked, min_samples:num("min_samples"), min_span_s:num("min_span_s"),
+    noise_floor_mg:num("noise_floor_mg"), g0_rms_factor:num("g0_rms_factor"),
+    g1_peak_ratio:num("g1_peak_ratio"), f_lo:num("f_lo"), f_hi:num("f_hi"),
+    nperseg_s:num("nperseg_s"), n_sub:num("n_sub"), g2_cv_max:num("g2_cv_max")/100,
+    g3_factor:num("g3_factor"), f1_min_hz:num("f1_min_hz"),
+    n_peaks:num("n_peaks"), peak_min_ratio:num("peak_min_ratio"),
+    f1_ref_hz:num("f1_ref_hz"), L_m:num("L_m"), mu_kg_m:num("mu_kg_m"),
+    despike:$("despike").checked, spike_win:num("spike_win"), spike_nsig:num("spike_nsig"),
+    hp_cutoff:num("hp_cutoff"), refine_f1:$("refine_f1").checked,
+    g2_mode:$("g2_mode").value, g2_band_frac:num("g2_band_frac"),
+    g2_sub_ratio:num("g2_sub_ratio"), g2_min_subs:num("g2_min_subs"),
+    multi_axis:$("multi_axis").checked, ma_band_frac:num("ma_band_frac"), ma_ratio:num("ma_ratio"),
+    harmonic_check:$("harmonic_check").checked, harm_ratio:num("harm_ratio"),
+    xcheck:$("xcheck").checked
+  };
+  return p;
+}
+
+function fillAxis(cols, def){
+  const sel=$("axis"); sel.innerHTML="";
+  // 加速度轴置顶（X/Y/Z 顺序），其余列随后
+  const prio=c=>{const m=c.match(/加速度([XYZ])/);return m?(m[1].charCodeAt(0)-88):9;};
+  const sorted=[...cols].sort((a,b)=>prio(a)-prio(b));
+  sorted.forEach(c=>{ const o=document.createElement("option"); o.value=c; o.textContent=c; sel.appendChild(o); });
+  if(def) sel.value=def;
+}
+
+// ---------------------------------------------------------------- 绘图
+function setup(cv){
+  const dpr=window.devicePixelRatio||1;
+  const w=cv.clientWidth||820, h=cv.clientHeight||230;
+  cv.width=Math.round(w*dpr); cv.height=Math.round(h*dpr);
+  const c=cv.getContext("2d"); c.setTransform(dpr,0,0,dpr,0,0);
+  c.clearRect(0,0,w,h);
+  return {c,w,h,pad:{l:58,r:14,t:12,b:26}};
+}
+function frame(o,xmin,xmax,ymin,ymax,xlab,ylab){
+  const {c,w,h,pad}=o, X0=pad.l, X1=w-pad.r, Y0=pad.t, Y1=h-pad.b;
+  c.strokeStyle="#eef1f6"; c.lineWidth=1; c.fillStyle="#8b95a5"; c.font="11px sans-serif";
+  for(let i=0;i<=4;i++){
+    const y=Y0+(Y1-Y0)*i/4; c.beginPath(); c.moveTo(X0,y); c.lineTo(X1,y); c.stroke();
+    const v=ymax-(ymax-ymin)*i/4;
+    c.textAlign="right"; c.fillText(Math.abs(v)>=100?v.toFixed(0):v.toFixed(2), X0-6, y+4);
+  }
+  for(let i=0;i<=5;i++){
+    const x=X0+(X1-X0)*i/5; c.beginPath(); c.moveTo(x,Y0); c.lineTo(x,Y1); c.stroke();
+    const v=xmin+(xmax-xmin)*i/5;
+    c.textAlign="center"; c.fillText(v.toFixed(v<10?1:0), x, Y1+16);
+  }
+  c.strokeStyle="#cdd4df"; c.beginPath(); c.moveTo(X0,Y0); c.lineTo(X0,Y1); c.lineTo(X1,Y1); c.stroke();
+  c.fillStyle="#8b95a5"; c.textAlign="right"; c.fillText(xlab,X1,Y1+22);
+  c.save(); c.translate(12,Y0+8); c.textAlign="left"; c.fillText(ylab,0,0); c.restore();
+  return {X0,X1,Y0,Y1};
+}
+function px(v,a,b,X0,X1){ return X0+(X1-X0)*(v-a)/Math.max(1e-12,b-a); }
+function py(v,a,b,Y0,Y1){ return Y1-(Y1-Y0)*(v-a)/Math.max(1e-12,b-a); }
+
+function drawCurve(res){
+  const cv=$("curve"), o=setup(cv), {c,pad}=o;
+  const t=res.series.t, y=res.series.y;
+  if(!t.length) return;
+  const tmin=Math.min(...t), tmax=Math.max(...t);
+  let lo=Math.min(...y), hi=Math.max(...y); const m=Math.max((hi-lo)*0.12,1e-6); lo-=m; hi+=m;
+  const F=frame(o,tmin,tmax,lo,hi,"时间 / s",res.meta.unit);
+  const W=res.meta.params.window_s;
+  // 当前窗高亮
+  const cur=res.windows[S.sel];
+  if(cur){
+    c.fillStyle="rgba(47,111,235,.08)";
+    c.fillRect(px(cur.t0,tmin,tmax,F.X0,F.X1),F.Y0,
+               Math.max(2,px(cur.t1,tmin,tmax,F.X0,F.X1)-px(cur.t0,tmin,tmax,F.X0,F.X1)),F.Y1-F.Y0);
+  }
+  c.strokeStyle="#c9d3e3"; c.setLineDash([3,3]);
+  for(let s=W;s<tmax;s+=W){
+    const x=px(s,tmin,tmax,F.X0,F.X1);
+    c.beginPath(); c.moveTo(x,F.Y0); c.lineTo(x,F.Y1); c.stroke();
+  }
+  c.setLineDash([]);
+  c.strokeStyle="#2f6feb"; c.lineWidth=1.2; c.beginPath();
+  for(let i=0;i<t.length;i++){
+    const X=px(t[i],tmin,tmax,F.X0,F.X1), Y=py(y[i],lo,hi,F.Y0,F.Y1);
+    i?c.lineTo(X,Y):c.moveTo(X,Y);
+  }
+  c.stroke();
+}
+
+function drawSpectrum(res){
+  const cv=$("spectrum"), o=setup(cv), {c}=o;
+  const w=res.windows[S.sel];
+  if(!w || !w.welch || !w.welch.freq.length){
+    c.fillStyle="#8b95a5"; c.font="12px sans-serif"; c.textAlign="center";
+    c.fillText("该窗无功率谱（样本不足）",o.w/2,o.h/2); return;
+  }
+  const f=w.welch.freq, p=w.welch.power;
+  const lg=p.map(v=>Math.log10(Math.max(v,1e-15)));
+  const fmin=Math.min(...f), fmax=Math.max(...f);
+  let lo=Math.min(...lg), hi=Math.max(...lg); const m=Math.max((hi-lo)*0.1,0.2); lo-=m; hi+=m;
+  const F=frame(o,fmin,fmax,lo,hi,"频率 / Hz","log10 PSD");
+  const plo=res.meta.params.f_lo, phi=Math.min(res.meta.params.f_hi,res.meta.nyquist_hz);
+  // 分析带外遮罩
+  c.fillStyle="rgba(140,148,160,.10)";
+  c.fillRect(F.X0,F.Y0,Math.max(0,px(plo,fmin,fmax,F.X0,F.X1)-F.X0),F.Y1-F.Y0);
+  c.fillRect(px(phi,fmin,fmax,F.X0,F.X1),F.Y0,Math.max(0,F.X1-px(phi,fmin,fmax,F.X0,F.X1)),F.Y1-F.Y0);
+  // 谱线
+  c.strokeStyle="#0f8a5f"; c.lineWidth=1.4; c.beginPath();
+  for(let i=0;i<f.length;i++){
+    const X=px(f[i],fmin,fmax,F.X0,F.X1), Y=py(lg[i],lo,hi,F.Y0,F.Y1);
+    i?c.lineTo(X,Y):c.moveTo(X,Y);
+  }
+  c.stroke();
+  // 主频
+  if(w.f1_hz){
+    const x=px(w.f1_hz,fmin,fmax,F.X0,F.X1);
+    c.strokeStyle="#d04a4a"; c.lineWidth=1.5; c.setLineDash([5,3]);
+    c.beginPath(); c.moveTo(x,F.Y0); c.lineTo(x,F.Y1); c.stroke(); c.setLineDash([]);
+    c.fillStyle="#d04a4a"; c.font="11px sans-serif"; c.textAlign="left";
+    c.fillText("f1 "+w.f1_hz.toFixed(3)+"Hz",Math.min(x+5,F.X1-96),F.Y0+14);
+  }
+  // k/T 下限
+  if(w.g3_threshold_hz){
+    const x=px(w.g3_threshold_hz,fmin,fmax,F.X0,F.X1);
+    c.strokeStyle="#b7791f"; c.setLineDash([2,3]); c.lineWidth=1;
+    c.beginPath(); c.moveTo(x,F.Y0); c.lineTo(x,F.Y1); c.stroke(); c.setLineDash([]);
+  }
+  // 各阶峰
+  (w.peaks||[]).forEach((q,i)=>{
+    const x=px(q.f_hz,fmin,fmax,F.X0,F.X1);
+    c.fillStyle="#2f6feb"; c.beginPath(); c.arc(x,F.Y1-6-(i%3)*13,3,0,Math.PI*2); c.fill();
+  });
+}
+
+// ---------------------------------------------------------------- 渲染
+function renderCards(res){
+  const s=res.state, w=res.windows[S.sel];
+  $("kValid").textContent = s.valid_count + " / " + s.evaluated;
+  $("kValidSub").textContent = "共 " + s.total_windows + " 窗，评估 " + s.evaluated + " 窗";
+  $("kState").textContent = s.status;
+  $("kState").style.color = s.status==="VALID" ? "var(--green)" : (s.status==="NO_VALID" ? "var(--red)" : "var(--amber)");
+  $("kStateSub").textContent = w ? ("当前窗 w"+w.idx+" · "+w.reason) : "—";
+  $("kF1").textContent = w && w.f1_hz ? w.f1_hz.toFixed(3)+" Hz" : "—";
+  $("kF1Sub").textContent = w ? ("峰/底 "+(w.peak_ratio??"—")+" · CV "+(w.cv!=null?(w.cv*100).toFixed(1)+"%":"—")
+    + (w.confirmed ? " · 多轴已确认" : (w.confirm ? " · 多轴未确认" : ""))) : "—";
+  if(s.current_cable){
+    $("kCable").textContent = s.current_cable.cable_force_idx + " %";
+    $("kCableSub").textContent = "f1="+s.current_cable.f1_hz+"Hz · 绝对 "+
+      s.current_cable.cable_force_n+" N"+(s.stale?(" · 沿用上次 VALID，时效 "+s.age_s+"s"):"");
+  }else{
+    $("kCable").textContent = "—";
+    $("kCableSub").textContent = "无任何 VALID 窗，不输出索力";
+  }
+  const box=$("concl");
+  if(s.has_output){
+    box.className="concl good";
+    box.textContent="存在 VALID 窗口：最后有效窗 w"+s.last_valid.idx+"（t="+s.last_valid.t1+
+      "s）给出 f1="+s.last_valid.f1_hz+"Hz、索力指数 "+s.last_valid.cable_force_idx+
+      "。"+(s.stale?"当前窗无效，索力沿用该值并标注时效 "+s.age_s+"s。":"当前窗有效，索力已刷新。");
+  }else{
+    const fails=["g0","g1","g2","g3"].map((k,i)=>["G0","G1","G2","G3"][i]+" "+
+      res.windows.filter(w=>!w.skipped&&!w[k]).length+"/"+s.evaluated);
+    box.className="concl bad";
+    box.textContent="四门全部拦下：0 个 VALID 窗，索力不输出（显示 —）。各门未通过计数 "+
+      fails.join(" · ")+"；静止/弱激励段本就不应刷新索力，这是设计预期。";
+  }
+}
+
+function renderTable(res){
+  const tb=$("tbl").querySelector("tbody"); tb.innerHTML="";
+  res.windows.forEach((w,i)=>{
+    const tr=document.createElement("tr");
+    tr.className = i===S.sel ? "sel":"";
+    const cell=v=>{const td=document.createElement("td"); td.innerHTML=v===null||v===undefined?"—":v; return td;};
+    tr.appendChild(cell("w"+w.idx));
+    tr.appendChild(cell(w.t0.toFixed(1)+"~"+w.t1.toFixed(1)));
+    tr.appendChild(cell(w.n));
+    if(w.skipped){
+      tr.appendChild(cell(w.rms_mg)); tr.appendChild(cell("—"));
+      for(let k=0;k<12;k++) tr.appendChild(cell("—"));
+      tr.appendChild(cell('<span class="tag skip">SKIPPED</span>'));
+      tr.appendChild(cell("—"));
+    }else{
+      tr.appendChild(cell(w.rms_mg.toFixed(3)));
+      tr.appendChild(cell(w.g0_threshold.toFixed(3)));
+      tr.appendChild(cell(tag(w.g0)));
+      tr.appendChild(cell(w.peak_ratio.toFixed(2)));
+      tr.appendChild(cell(tag(w.g1)));
+      tr.appendChild(cell((w.sub_freqs||[]).map(v=>v==null?"—":v.toFixed(2)).join(" ")));
+      tr.appendChild(cell(w.cv==null?"—":(w.cv*100).toFixed(1)));
+      tr.appendChild(cell(tag(w.g2)));
+      tr.appendChild(cell(w.f1_hz==null?"—":w.f1_hz.toFixed(3)));
+      tr.appendChild(cell(w.g3_threshold_hz.toFixed(3)));
+      tr.appendChild(cell(tag(w.g3)));
+      tr.appendChild(cell('<span class="tag '+(w.valid?"valid":"invalid")+'">'+w.state+'</span>'));
+      tr.appendChild(cell(w.confirmed
+        ? '<span class="tag pass">✓'+((w.confirm&&w.confirm.axes_ok)||0)+'轴</span>'
+        : (w.confirm ? '<span class="tag fail">未确认</span>' : "—")));
+      tr.appendChild(cell(w.cable_force_idx==null?"—":w.cable_force_idx.toFixed(2)));
+    }
+    tr.onclick=()=>{ if(!w.skipped){ S.sel=i; renderTable(res); drawCurve(res); drawSpectrum(res); renderPeaks(res); renderCards(res);} };
+    tb.appendChild(tr);
+  });
+}
+
+function renderPeaks(res){
+  const w=res.windows[S.sel], box=$("peaks");
+  $("peakTitle").textContent = w ? ("窗 w"+w.idx+"  "+w.t0.toFixed(1)+"~"+w.t1.toFixed(1)+"s") : "—";
+  box.innerHTML="";
+  if(!w || !w.peaks || !w.peaks.length){
+    box.innerHTML='<span class="meta">该窗无满足「峰/中位数 ≥ '+res.meta.params.peak_min_ratio+'」的显著峰</span>';
+  }else{
+    w.peaks.forEach(q=>{
+      const d=document.createElement("div"); d.className="chip";
+      d.innerHTML="<b>"+q.f_hz.toFixed(3)+" Hz</b> · 峰/底 "+q.ratio.toFixed(1)+
+        " · 阶次比 "+q.order.toFixed(2)+(q.n_est?(" (n≈"+q.n_est+")"):"");
+      box.appendChild(d);
+    });
+  }
+  renderConfirm(res, w);
+}
+
+function renderConfirm(res, w){
+  const cb=$("confirmBox"); cb.innerHTML="";
+  if(!w || w.skipped || !w.confirm){ cb.innerHTML=""; return; }
+  const c=w.confirm, parts=[];
+  const axTags=Object.entries(c.axes||{}).map(([k,v])=>
+    v ? (k+"轴 "+v.f_hz.toFixed(3)+"Hz ×"+v.ratio.toFixed(0)+" "+(v.ok?"✓":"✗"))
+      : (k+"轴 无峰")).join(" · ");
+  if(Object.keys(c.axes||{}).length) parts.push("多轴同频："+axTags+
+    " → "+(w.confirmed?"已确认":"未确认（不否决判定，纯竖向振型属正常）"));
+  if(Object.keys(c.harmonics||{}).length)
+    parts.push("谐波族："+Object.entries(c.harmonics).map(([n,r])=>n+"f1 ×"+r.toFixed(0)).join(" · "));
+  if(c.cross) parts.push("过零率 "+(c.cross.f_zc==null?"—":c.cross.f_zc.toFixed(3))+"Hz / Hilbert "+
+    (c.cross.f_hilbert==null?"—":c.cross.f_hilbert.toFixed(3))+"Hz → "+(c.cross.ok?"一致 ✓":"不一致 ✗"));
+  if(c.zeta!=null) parts.push("阻尼比 ζ(上限粗估) "+c.zeta);
+  if(c.amp_eq_mg!=null) parts.push("等效正弦幅值 "+c.amp_eq_mg+" "+res.meta.unit);
+  if(w.n_spike) parts.push("去尖峰剔除 "+w.n_spike+" 点");
+  cb.innerHTML = parts.length ? parts.join("<br>") : "该窗无确认证据。";
+}
+
+function render(res){
+  S.result=res;
+  const ok=res.windows.map((w,i)=>({w,i})).filter(o=>!o.w.skipped);
+  S.sel = ok.length ? ok[ok.length-1].i : 0;
+  const m=res.meta;
+  $("curveTitle").textContent = m.filename+" · "+m.axis+" ("+m.unit+") · fs="+m.fs+"Hz · "+
+    m.n_samples+" 点 / "+m.duration_s+"s";
+  $("specTitle").textContent = "分析带 "+m.params.f_lo+"~"+Math.min(m.params.f_hi,m.nyquist_hz)+
+    "Hz · Nyquist="+m.nyquist_hz+"Hz · 本底 RMS="+res.noise_floor+" "+m.unit;
+  $("meta").textContent = "索力公式：相对指数 =(f1/f1_ref)²×100；绝对 T = 4L²μf1²（L="+m.params.L_m+
+    "m, μ="+m.params.mu_kg_m+"kg/m，均需现场标定）。绝对索力仅为按所填参数的换算值，未做千斤顶对照。";
+  const cm=m.calib;
+  if(cm){
+    const rw=cm.runtime_warnings||[];
+    $("calibWarn").textContent=[...(cm.warnings||[]),...rw].join(" ｜ ");
+    if(S.dirty) setBadge("参数已偏离标定","dirty");
+    else if(rw.length) setBadge("指纹不匹配","dirty");
+  }
+  renderCards(res); drawCurve(res); drawSpectrum(res); renderTable(res); renderPeaks(res);
+  msg("分析完成："+res.state.valid_count+" 个 VALID 窗 / "+res.state.evaluated+" 个评估窗");
+}
+
+// ---------------------------------------------------------------- 事件
+$("file").onchange = async e=>{
+  const f=e.target.files[0]; if(!f) return;
+  try{
+    S.content=await f.text(); S.filename=f.name;
+    const r=await post("/api/columns",{content:S.content});
+    fillAxis(r.axes,r.default);
+    msg("已载入 "+f.name+" · "+r.rows+" 行数据 · "+r.axes.length+" 个数值列");
+  }catch(err){ msg("载入失败："+err.message,true); }
+};
+
+$("loadSample").onclick = async ()=>{
+  const name=$("sample").value;
+  if(!name){ msg("请先选择一个示例文件",true); return; }
+  try{
+    const r=await fetch("/api/sample?name="+encodeURIComponent(name));
+    const j=await r.json();
+    if(!r.ok) throw new Error(j.error||"读取失败");
+    S.content=j.content; S.filename=j.filename;
+    const c=await post("/api/columns",{content:S.content});
+    fillAxis(c.axes,c.default);
+    msg("已载入示例 "+j.filename+" · "+c.rows+" 行数据");
+  }catch(err){ msg("载入失败："+err.message,true); }
+};
+
+$("run").onclick = async ()=>{
+  if(!S.content){ msg("请先上传 csv / txt 文件，或载入示例",true); return; }
+  if(!$("axis").value){ msg("请先选择数据轴",true); return; }
+  const btn=$("run"); btn.disabled=true; msg("计算中…");
+  try{
+    const res=await post("/api/analyze",{content:S.content,filename:S.filename,
+                                         axis:$("axis").value,params:collect(),
+                                         calib:S.calibDoc||undefined});
+    render(res);
+  }catch(err){ msg("分析失败："+err.message,true); }
+  finally{ btn.disabled=false; }
+};
+
+$("reset").onclick = ()=>{
+  if(S.defaults) fillForm(S.defaults);
+  S.dirty=false; renderCalib(S.calib);
+  msg(S.calib?"参数已重置为标定值":"参数已重置为默认值");
+};
+
+$("loadCalibFile").onclick = async ()=>{
+  const f=$("calibFile").files[0];
+  if(!f){ msg("请先选择标定 JSON 文件",true); return; }
+  try{
+    const j=await post("/api/calib/validate",{content:await f.text()});
+    S.calibDoc=j.calib; S.calib=j.meta; S.defaults=j.defaults; S.dirty=false;
+    fillForm(j.defaults); renderCalib(j.meta);
+    msg("已载入标定 "+f.name+"（本次会话生效；长期生效请替换服务端同目录 accel_calib.json 并重启）");
+  }catch(err){ msg("标定文件载入失败："+err.message,true); }
+};
+
+$("reloadServerCalib").onclick = async ()=>{
+  try{
+    const j=await (await fetch("/api/defaults")).json();
+    S.defaults=j.defaults; S.calib=j.calib; S.calibDoc=null; S.dirty=false;
+    fillForm(j.defaults); renderCalib(j.calib);
+    msg(j.calib?"已恢复服务默认参数（含服务端标定）":"已恢复内置默认参数（服务未加载标定）");
+  }catch(err){ msg("恢复失败："+err.message,true); }
+};
+
+// 手改任一参数即标记「偏离标定」，避免参数来源说不清
+document.querySelector("aside.panel").addEventListener("change",e=>{
+  if(e.target.id==="file") return;
+  S.dirty=true; renderDirty();
+},true);
+
+$("curve").onclick = e=>{
+  if(!S.result) return;
+  const r=$("curve").getBoundingClientRect();
+  const tmax=Math.max(...S.result.series.t), tmin=Math.min(...S.result.series.t);
+  const pad=58, w=r.width-14-pad;
+  const t=tmin+(e.clientX-r.left-pad)/Math.max(1,w)*(tmax-tmin);
+  const hit=S.result.windows.findIndex(q=>t>=q.t0&&t<=q.t1&&!q.skipped);
+  if(hit>=0){ S.sel=hit; drawCurve(S.result); drawSpectrum(S.result); renderTable(S.result); renderPeaks(S.result); renderCards(S.result); }
+};
+
+window.addEventListener("resize",()=>{ if(S.result){ drawCurve(S.result); drawSpectrum(S.result); } });
+
+(async ()=>{
+  try{
+    const r=await fetch("/api/defaults"); const j=await r.json();
+    S.defaults=j.defaults; S.calib=j.calib||null; S.calibDoc=null; S.dirty=false;
+    fillForm(j.defaults); renderCalib(j.calib||null);
+    const sel=$("sample");
+    (j.samples||[]).forEach(n=>{const o=document.createElement("option");o.value=n;o.textContent=n;sel.appendChild(o);});
+    msg(S.calib?"服务已连接，标定参数已自动生效。上传文件后点击「开始分析」。"
+               :"服务已连接（未加载标定）。上传文件或载入示例后点击「开始分析」。");
+  }catch(err){ msg("服务连接失败："+err.message,true); }
+})();
+</script>
+</body>
+</html>

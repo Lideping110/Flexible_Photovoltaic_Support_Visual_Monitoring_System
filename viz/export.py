@@ -14,6 +14,7 @@ import time
 from pathlib import Path
 
 from utils.common import log
+from utils.config import camera_undistort
 from .readers import group_by_frame, load_jsonl
 from .render import render_annotated_video
 
@@ -68,7 +69,7 @@ def export_cam_video(cam: dict, output_dir, pole_mode: str, out_dir,
     参数:
         cam         {"id","task","url"(绝对路径或 rtsp/http),"calibration"|None}
         output_dir  结果目录（读 {branch}/{cam_id}/{kind}.jsonl）
-        pole_mode   "image_relative" → 渲染前逐帧去畸变
+        pole_mode   pole 测量模式；实际是否去畸变再按 cameras[].undistort 判定
         out_dir     输出目录
     返回:
         {"cam","status":"ok","out",...} 或 {"cam","status":"skip","reason"}
@@ -94,7 +95,10 @@ def export_cam_video(cam: dict, output_dir, pole_mode: str, out_dir,
         return {"cam": cam["id"], "status": "skip", "reason": "结果文件为空"}
 
     frame_map = group_by_frame(rows)
-    undistort = (branch == "pole" and pole_mode == "image_relative")
+    # 与 capture 共用同一判定：相机开关关掉去畸变时，叠加层也不能对源帧去畸变，
+    # 否则 box/top/bottom（原始像素坐标）会与画面错位。
+    undistort = (camera_undistort(cam, pole_mode, "export")
+                 if branch == "pole" else False)
     pids = {r.get("pid") for recs in frame_map.values()
             for r in recs if r.get("pid") is not None}
     baseline_poles = len(pids)

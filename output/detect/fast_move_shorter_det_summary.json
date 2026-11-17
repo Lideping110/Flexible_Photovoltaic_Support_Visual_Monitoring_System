@@ -1,0 +1,183 @@
+{
+  "scope": {
+    "purpose": "纯检测验证：不做跟踪 / 亚像素定位 / FFT / 主链路落盘",
+    "config": "D:\\Flexible_Photovoltaic_Support_Visual_Monitoring_System\\config.yaml",
+    "source": "D:\\Flexible_Photovoltaic_Support_Visual_Monitoring_System\\babiao\\fast_move_shorter.mp4",
+    "cam": "babiao/fast_move_shorter.mp4",
+    "weights": "D:\\Flexible_Photovoltaic_Support_Visual_Monitoring_System\\models\\marker26s_det_openvino_model",
+    "device": "intel:gpu",
+    "conf": 0.25,
+    "class_id": 0,
+    "src_fps": 25.0,
+    "out_fps": 25.0,
+    "stride": 1,
+    "batch": 1,
+    "max_frames": 60,
+    "interrupted": false
+  },
+  "stats": {
+    "frames_read": 60,
+    "frames_inferred": 60,
+    "frames_with_det": 60,
+    "detection_rate": 1.0,
+    "boxes_total": 120,
+    "boxes_per_inferred_frame": 2.0,
+    "conf_min": 0.332,
+    "conf_mean": 0.8067,
+    "conf_max": 0.8911,
+    "infer_ms_mean": 8.75,
+    "infer_ms_p50": 8.57,
+    "infer_ms_p95": 10.34,
+    "steady_batch_size": 1,
+    "steady_calls": 59,
+    "steady_ms_mean": 8.75,
+    "steady_ms_p50": 8.48,
+    "steady_ms_p95": 10.34,
+    "steady_fps": 114.35,
+    "batch_sizes": [
+      "1"
+    ],
+    "call_ms_by_batch": {
+      "1": {
+        "calls": 60,
+        "mean_ms": 8.75,
+        "p50_ms": 8.57,
+        "max_ms": 11.23
+      }
+    },
+    "calls_total": 60,
+    "calls_head": [
+      {
+        "index": 1,
+        "batch": 1,
+        "call_ms": 9.15,
+        "per_frame_ms": 9.145
+      },
+      {
+        "index": 2,
+        "batch": 1,
+        "call_ms": 8.66,
+        "per_frame_ms": 8.663
+      },
+      {
+        "index": 3,
+        "batch": 1,
+        "call_ms": 7.83,
+        "per_frame_ms": 7.826
+      },
+      {
+        "index": 4,
+        "batch": 1,
+        "call_ms": 8.46,
+        "per_frame_ms": 8.457
+      },
+      {
+        "index": 5,
+        "batch": 1,
+        "call_ms": 9.06,
+        "per_frame_ms": 9.058
+      },
+      {
+        "index": 6,
+        "batch": 1,
+        "call_ms": 8.03,
+        "per_frame_ms": 8.026
+      },
+      {
+        "index": 7,
+        "batch": 1,
+        "call_ms": 8.85,
+        "per_frame_ms": 8.855
+      },
+      {
+        "index": 8,
+        "batch": 1,
+        "call_ms": 8.06,
+        "per_frame_ms": 8.061
+      },
+      {
+        "index": 9,
+        "batch": 1,
+        "call_ms": 8.57,
+        "per_frame_ms": 8.574
+      },
+      {
+        "index": 10,
+        "batch": 1,
+        "call_ms": 9.11,
+        "per_frame_ms": 9.107
+      },
+      {
+        "index": 11,
+        "batch": 1,
+        "call_ms": 7.79,
+        "per_frame_ms": 7.788
+      },
+      {
+        "index": 12,
+        "batch": 1,
+        "call_ms": 10.27,
+        "per_frame_ms": 10.272
+      },
+      {
+        "index": 13,
+        "batch": 1,
+        "call_ms": 8.18,
+        "per_frame_ms": 8.176
+      },
+      {
+        "index": 14,
+        "batch": 1,
+        "call_ms": 8.25,
+        "per_frame_ms": 8.251
+      },
+      {
+        "index": 15,
+        "batch": 1,
+        "call_ms": 7.63,
+        "per_frame_ms": 7.629
+      },
+      {
+        "index": 16,
+        "batch": 1,
+        "call_ms": 8.01,
+        "per_frame_ms": 8.011
+      },
+      {
+        "index": 17,
+        "batch": 1,
+        "call_ms": 9.27,
+        "per_frame_ms": 9.271
+      },
+      {
+        "index": 18,
+        "batch": 1,
+        "call_ms": 7.54,
+        "per_frame_ms": 7.544
+      },
+      {
+        "index": 19,
+        "batch": 1,
+        "call_ms": 7.79,
+        "per_frame_ms": 7.789
+      },
+      {
+        "index": 20,
+        "batch": 1,
+        "call_ms": 9.34,
+        "per_frame_ms": 9.339
+      }
+    ],
+    "infer_only_fps": 114.26,
+    "end_to_end_fps": 48.96,
+    "wall_s": 1.23,
+    "no_det_frames_count": 0,
+    "no_det_frames_head": []
+  },
+  "outputs": {
+    "video": "D:\\Flexible_Photovoltaic_Support_Visual_Monitoring_System\\output\\detect\\fast_move_shorter_det.mp4",
+    "jsonl": "D:\\Flexible_Photovoltaic_Support_Visual_Monitoring_System\\output\\detect\\fast_move_shorter_det.jsonl",
+    "summary": "D:\\Flexible_Photovoltaic_Support_Visual_Monitoring_System\\output\\detect\\fast_move_shorter_det_summary.json",
+    "h264": true
+  }
+}

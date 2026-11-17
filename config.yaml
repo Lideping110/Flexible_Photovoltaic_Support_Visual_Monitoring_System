@@ -5,13 +5,23 @@
 # =====================================================================
 
 cameras:
+  # 相机级开关 enabled：true 执行该相机任务；false 则本次运行完全不执行
+  # （不拉流、不推理、不产出、大屏不显示）。某一分支全部关闭时该分支
+  # 的采集/推理/分析进程也不会启动。缺省视为 true（兼容旧配置）。
+  #
+  # 相机级开关 undistort（仅 pole 分支生效）：true 抽帧后先 cv2.undistort
+  # 再送入分割/测量；false 直接使用原始帧。缺省时跟随 pole.measurement.mode：
+  # image_relative 默认 true，world_3d 默认 false（外参模式在像素点层面用
+  # K/dist 反投影，再全图去畸变会重复去畸变）。marker 固定不去畸变。
   - id: pole_cam_01
+    enabled: true
     # RTSP 实时流（现场部署示例）：
       # "rtsp://admin:password@192.168.1.64:554/streaming/Channels/101"
     # 当前为联调测试，使用本地视频文件。
     url: "1080/1080.mp4"
     # url: "rtsp://admin:hhjt110110@192.168.1.65:554/streaming/Channels/101"
     task: pole                      # pole = 立柱监测（分割模型，1fps 抽帧）
+    undistort: true                 # true=抽帧后去畸变；false=用原始帧
     # 本摄像头专属标定：内参 K / 畸变 dist / 外参 R,t（OpenCV 约定 Xc = R Xw + t）
     calibration:
       K:
@@ -26,9 +36,11 @@ cameras:
       t: [0.0, 0.0, 5.0]
 
   - id: pole_cam_02
+    enabled: true
     # url: "rtsp://admin:hhjt110110@192.168.1.64:554/streaming/Channels/101"
     url: "1080/1080-2.mp4"
     task: pole                      # pole = 立柱监测（分割模型，1fps 抽帧）
+    undistort: true                 # true=抽帧后去畸变；false=用原始帧
     # 本摄像头专属标定：内参 K / 畸变 dist / 外参 R,t（OpenCV 约定 Xc = R Xw + t）
     calibration:
       K:
@@ -45,19 +57,23 @@ cameras:
     #   "rtsp://admin:password@
 
   - id: marker_cam_01
+    enabled: true
     # RTSP 实时流（现场部署真实地址，已实测沙箱可直连）：
     # url: "rtsp://admin:hhjt110110@192.168.1.65:554/streaming/Channels/101"
     # 联调测试用的本地视频文件（改回此行即可恢复离线回放）：
     url: "babiao/fast_move_shorter.mp4"
     task: marker                    # marker = 靶标跟踪（检测模型，逐帧 + 30s FFT）
+    undistort: false                # 占位：marker 固定不去畸变，此字段不生效
     # 注意：marker 在原始（未畸变）像素空间做亚像素定位，mm/px 由靶标外圈圆
     # 直径自标定（见 marker.calibration），不需要相机内参/外参（K/dist/R/t），
     # 也不做去畸变——请勿在此挂 calibration 块，否则只会误导、不被加载。
     
   - id: marker_cam_02
+    enabled: true
     # url: "rtsp://admin:hhjt110110@192.168.1.64:554/streaming/Channels/101"
     url: "babiao/static_video.mp4"
     task: marker
+    undistort: false                # 占位：marker 固定不去畸变，此字段不生效
 # ---------------------------------------------------------------------
 # 模型（每个分支只加载一份，跨摄像头攒批推理）
 # ---------------------------------------------------------------------
@@ -75,6 +91,10 @@ models:
     openvino_dir: "./models/marker26s_det_openvino_model"
     weights: "./models/marker26s_det.pt"
     confidence: 0.25
+    # NMS IoU：ultralytics 默认 0.7 对本模型偏高——同一靶标的两个候选框 IoU 约
+    # 0.66~0.70 压不掉，会多出一个低置信度重复框。0.6 实测可消除，密集靶标场景
+    # 需重新标定（过小会合并相邻靶标）。
+    iou: 0.6
     class_id: 0
     device: "intel:gpu"             # 无核显时可改 "cpu"
     tracker: "bytetrack.yaml"

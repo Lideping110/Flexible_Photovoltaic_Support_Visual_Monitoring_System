@@ -7,7 +7,7 @@ from pathlib import Path
 
 import yaml
 
-from .common import WORKSPACE_ROOT
+from .common import WORKSPACE_ROOT, log
 
 VALID_TASKS = {"pole", "marker"}
 
@@ -103,8 +103,46 @@ def _validate_models(cfg: dict) -> None:
         raise ValueError("存在 marker 摄像头但 models.marker_det 未配置")
 
 
+def camera_undistort(cam: dict, pole_mode: str, tag: str = "config") -> bool:
+    """返回该相机最终是否去畸变；采集与可视化共用这一处判定。
+
+    cameras[].undistort 缺省时沿用原口径（image_relative 去畸变、world_3d 不去）。
+    显式 false 可在 image_relative 下关闭去畸变；显式 true 在 world_3d 下会被
+    忽略并告警——world_3d 的 pixel_ray_world 已用 K/dist 逐点反投影，若再对整帧
+    cv2.undistort，会把同一畸变扣两次，倾角结果直接错。
+    """
+    base = pole_mode == "image_relative"
+    value = cam.get("undistort")
+    if value is None:
+        return base
+    if isinstance(value, str):
+        text = value.strip().lower()
+        if text in {"1", "true", "yes", "on"}:
+            value = True
+        elif text in {"0", "false", "no", "off"}:
+            value = False
+        else:
+            raise ValueError(
+                f"相机 {cam.get('id')} 的 undistort 无法解析: {value!r}"
+                "（请用 true/false）")
+    value = bool(value)
+    if value and not base:
+        log(tag, f"相机 {cam.get('id')} undistort=true 与 pole.measurement.mode="
+                 f"{pole_mode} 冲突，已忽略：world_3d 在像素点层面已用 K/dist "
+                 "反投影，整帧再去畸变会重复")
+        return False
+    return value
+
+
 def load_config(path) -> dict:
-    """加载并校验统一配置；路径解析为绝对路径。"""
+    """加载并校验统一配置；路径解析为绝对路径。
+
+    cameras[].enabled 相机级开关：显式 enabled: false 的相机在**这里**就被
+    剔除（等同未配置），下游（supervisor / capture / inference / dashboard）
+    全部自动看不到它——该相机不拉流、不推理、不产出，也不出现在大屏下拉与
+    /video 流里；某分支相机全关时 supervisor 不再 spawn 该分支进程。缺省或
+    true 均视为启用，旧配置无需改动即可兼容。
+    """
     path = Path(path).resolve()
     if not path.is_file():
         raise FileNotFoundError(f"配置文件不存在: {path}")
@@ -112,6 +150,16 @@ def load_config(path) -> dict:
         cfg = yaml.safe_load(f) or {}
     cfg = _merge_defaults(cfg)
     _validate_cameras(cfg)
+
+    disabled = [c.get("id") for c in cfg.get("cameras", [])
+                if c.get("enabled") is False]
+    if disabled:
+        cfg["cameras"] = [c for c in cfg["cameras"]
+                          if c.get("enabled") is not False]
+        log("config", f"相机开关关闭，本次运行剔除: {disabled}")
+    if not cfg.get("cameras"):
+        raise ValueError("所有摄像头都被 enabled:false 关闭，无可运行任务")
+
     _validate_models(cfg)
 
     # 统一解析 output_dir / 模型路径为绝对路径

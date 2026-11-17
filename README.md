@@ -188,9 +188,10 @@ uv run python viz_overlay.py --cam marker_cam_01 --dump-frames 6
 ```
 
 - 原理：按 `frame_id`（源视频 0 基真帧序）顺序遍历原始视频逐帧对位叠加，规避 H.264 seek 漂移；
-- **坐标系对齐**：marker 分支不去畸变 → 直接叠加；pole 分支 `image_relative` 模式
-  在 capture 阶段已 `cv2.undistort` → 渲染前对每帧做同参数去畸变，保证
-  `box/top/bottom` 严丝合缝；
+- **坐标系对齐**：marker 分支固定不去畸变 → 直接叠加；pole 分支按
+  `cameras[].undistort` 逐相机决定（缺省跟随 `pole.measurement.mode`：
+  `image_relative` 去畸变、`world_3d` 不去畸变）。capture 阶段若已去畸变，
+  渲染前对每帧做同参数去畸变，保证 `box/top/bottom` 严丝合缝；
 - **渲染对齐**：pole 分支复刻 `D:\摄像头拉流 pole_tilt_monitor` 的实时渲染风格
   （`vision.draw_measurement`）：白框、绿顶/红底端点圆、青色中心线、白字
   `ID..Q..OK LR..FB..T..deg`、INVALID 橙字、ALARM 红字、顶部 HUD

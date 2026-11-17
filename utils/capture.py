@@ -1,7 +1,7 @@
 """拉流进程：每个分支一个进程，内部每摄像头一个读流线程。
 
 - pole 分支：线程内按 sample_fps 抽帧（grab+retrieve 保时序），
-  并用本摄像头 K/dist 去畸变（image_relative 模式）。
+  并按 cameras[].undistort 逐相机决定是否用本摄像头 K/dist 去畸变。
 - marker 分支：逐帧解码（sample_fps=None）。
 - 帧消息 {"cam_id","frame_id","ts","frame"} → 有界帧队列（丢旧保新）；
   状态事件 → 结果队列（阻塞写，不丢）。
@@ -16,6 +16,7 @@ import numpy as np
 
 from .common import (SENTINEL, is_realtime_source, log, open_camera,
                      put_backpressure, put_blocking, put_latest)
+from .config import camera_undistort
 
 
 def _undistorter(calibration: dict):
@@ -306,17 +307,21 @@ def run_capture(branch: str, cameras: list, frame_queues: dict, result_q,
 
     reconnect_s = float(runtime_cfg.get("reconnect_s", 5.0))
     sample_fps = None
-    undistort = False
+    pole_mode = None
     if branch == "pole":
         sample_fps = float((pole_cfg or {}).get("sample_fps", 1.0))
-        mode = ((pole_cfg or {}).get("measurement") or {}).get("mode", "image_relative")
-        undistort = mode == "image_relative"
-        log(tag, f"抽帧 {sample_fps} fps, 去畸变={undistort}")
+        pole_mode = ((pole_cfg or {}).get("measurement") or {}).get(
+            "mode", "image_relative")
+        log(tag, f"抽帧 {sample_fps} fps, pole 测量模式={pole_mode}")
 
     threads = []
     buffers = {}          # cam_id -> RollingBuffer（仅实时 marker 相机）
     for cam in cameras:
         q = frame_queues[cam["id"]]
+        # 去畸变逐相机判定：cameras[].undistort 可覆盖 measurement.mode 的默认值
+        cam_undistort = (camera_undistort(cam, pole_mode, tag)
+                         if branch == "pole" else False)
+        log(tag, f"{cam['id']} 去畸变={cam_undistort}")
         # 文件源（非实时）背压不丢帧；实时源丢旧保新以限制延迟
         block_on_full = not is_realtime_source(cam["url"])
         rolling = None
@@ -329,7 +334,7 @@ def run_capture(branch: str, cameras: list, frame_queues: dict, result_q,
         t = threading.Thread(
             target=_camera_loop,
             args=(cam, q, result_q, stop_event, branch, sample_fps,
-                  undistort, reconnect_s, block_on_full, rolling),
+                  cam_undistort, reconnect_s, block_on_full, rolling),
             daemon=True,
         )
         t.start()

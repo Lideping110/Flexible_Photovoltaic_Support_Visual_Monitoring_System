@@ -1,0 +1,436 @@
+{
+  "schema_version": 1,
+  "generated_at": "2026-11-13T10:08:12",
+  "tool": "calibrate_accel.py",
+  "sensor": {
+    "id": "WT901-0001",
+    "model": "WT901SDCL-BT50",
+    "range_g": 2.0,
+    "rate_hz": 10.0,
+    "axis_default": "加速度Z(g)"
+  },
+  "environment": {
+    "temp_c": 22.0,
+    "mount": "bench",
+    "operator": ""
+  },
+  "source": [
+    {
+      "file": "data_0.csv",
+      "sha256": "4f7151fda941772711a38da18881043d86488fc2736d8f4c7650b39aa2185ce0",
+      "rows": 1179,
+      "pose": ""
+    }
+  ],
+  "levels": {
+    "L1_sensor": {
+      "health": {
+        "n_samples": 1212,
+        "duration_s": 121.1,
+        "fs_hz": 10.0,
+        "dt_median_s": 0.1,
+        "irregular_dt_count": 33,
+        "irregular_dt_pct": 2.801,
+        "unique_values": 11,
+        "quant_step_mg": 1.0,
+        "longest_constant_run": 6,
+        "peak_to_peak_mg": 10.0,
+        "mean_g": 0.999803,
+        "columns": [
+          "加速度X(g)",
+          "加速度Y(g)",
+          "加速度Z(g)",
+          "角速度X(°/s)",
+          "角速度Y(°/s)",
+          "角速度Z(°/s)",
+          "角度X(°)",
+          "角度Y(°)",
+          "角度Z(°)",
+          "磁场X(ʯt)",
+          "磁场Y(ʯt)",
+          "磁场Z(ʯt)",
+          "温度(℃)",
+          "四元数0()",
+          "四元数1()",
+          "四元数2()",
+          "四元数3()"
+        ],
+        "axis_column": "加速度Z(g)",
+        "segments": 1,
+        "per_segment_s": [
+          121.2
+        ],
+        "total_duration_s": 121.2,
+        "usable_window_s": 120.0,
+        "wasted_tail_s": 1.2,
+        "independent_windows": 4,
+        "fs_mismatch": false,
+        "min_minutes_required": 5.0,
+        "min_segments_recommended": 3
+      },
+      "gravity": {
+        "method": "single_pose",
+        "factory_calib_touched": false,
+        "gravity_norm_g": 0.999804,
+        "gravity_norm_dev_pct": -0.02,
+        "mount_tilt_deg": 0.073,
+        "mean_vector_g": [
+          -0.000487,
+          -0.001182,
+          0.999803
+        ],
+        "note": "单姿态无法分离「零偏」与「安装倾角」，上式为二者综合偏差；不做补偿、不覆盖出厂标定。",
+        "poses": [
+          ""
+        ],
+        "saturation": false,
+        "optional_correction": null
+      },
+      "noise": {
+        "noise_floor_mg": 1.181,
+        "definition": "预处理(去尖峰→去趋势→0.3Hz高通)后逐30s窗 RMS 的 10 分位，与 G0 同口径",
+        "n_windows": 4,
+        "pre_rms_mean_mg": 1.2167,
+        "p10_se_mg": 0.031,
+        "p10_bias_pct": -3.3,
+        "raw_std_mg": 1.2771,
+        "raw_std_vs_floor_pct": 8.14,
+        "window_rms_mg": [
+          1.2757,
+          1.1715,
+          1.2165,
+          1.2031
+        ],
+        "abs_percentile_mg": {
+          "p50": 0.7314,
+          "p95": 2.5278,
+          "p99": 3.5176,
+          "max": 4.6189
+        },
+        "lag1_autocorr": -0.0431,
+        "white_like": true,
+        "quant_step_mg": 1.0
+      }
+    },
+    "L2_thresholds": {
+      "false_alarm": {
+        "n_trials": 150,
+        "n_independent_windows": 4,
+        "pseudo_replication_factor": 37.5,
+        "g1_ratio_p50": 1.91,
+        "g1_ratio_p995": 2.63,
+        "g1_ratio_p999": 2.63,
+        "g1_ratio_max": 2.63,
+        "g1_synthetic_p999": 3.494,
+        "g1_synthetic_max": 3.5,
+        "g0_rms_p999_mg": 1.2757,
+        "g0_rms_max_mg": 1.2757,
+        "derived_g1": 6.0,
+        "recommended_g1": 10.0,
+        "margin_to_production": 3.8,
+        "derived_g0_factor": 1.2,
+        "note": "实测窗有放回抽样只能覆盖 n_independent_windows 个不同窗，p99.9 属下界估计；已用独立合成白噪交叉验证并取较严者。recommended_g1 取与生产基线 10 的较大者。换 nperseg_s / f_lo / f_hi 会改变带内格点数，必须重标"
+      },
+      "injection": {
+        "n_cases": 55,
+        "amplitudes_mg": [
+          0.5,
+          1.0,
+          2.0,
+          3.0,
+          5.0
+        ],
+        "frequencies_hz": [
+          0.2,
+          0.3,
+          0.5,
+          0.8,
+          1.0,
+          1.5,
+          2.0,
+          2.5,
+          3.0,
+          4.0,
+          4.5
+        ],
+        "min_detect_amp_mg": {
+          "0.2": 0.0,
+          "0.3": 3.0,
+          "0.5": 2.0,
+          "0.8": 2.0,
+          "1.0": 1.0,
+          "1.5": 2.0,
+          "2.0": 2.0,
+          "2.5": 2.0,
+          "3.0": 2.0,
+          "4.0": 2.0,
+          "4.5": 2.0
+        },
+        "stable_at_3mg_hz": [
+          0.3,
+          0.5,
+          0.8,
+          1.0,
+          1.5,
+          2.0,
+          2.5,
+          3.0,
+          4.0,
+          4.5
+        ],
+        "f_true_min_hz": 0.3,
+        "slow_wave_false_valid_hz": [
+          0.3,
+          0.5,
+          0.8,
+          1.0,
+          1.5,
+          2.0,
+          2.5,
+          3.0,
+          4.0,
+          4.5
+        ],
+        "slow_wave_false_valid_lowband_hz": [
+          0.3,
+          0.5,
+          0.8
+        ],
+        "injected_valid_cv_p99": 0.02709,
+        "cv_legacy_grid_floor": 0.22222,
+        "derived_g2_cv_max": 0.06,
+        "recommended_g2_cv_max": 0.08,
+        "method_limit": "四门只判「窗内是否存在稳定窄带峰」，不判「这个峰是不是结构模态」。因此任何频率的强单频信号（含阵风脉动、电磁干扰）都会被判 VALID，这是单轴 + 四门的方法固有局限，不是某个频段的混淆区；必须靠多轴同频确认、跨窗一致性、张力/温度先验补判。",
+        "low_freq_sensitivity": "0.3Hz 高通与 f_lo 重合，0.2Hz 注入在 5mg 内完全检不出、0.3Hz 需 3mg、0.5Hz 需 2mg；低频检出阈值显著升高是滤波代价。",
+        "welch_delta_f_hz": 0.125,
+        "nyquist_hz": 5.0,
+        "n_windows_pool": 4,
+        "base_window_rms_mg": 1.2098,
+        "synthetic_only": true,
+        "note": "注入单位 mg；扫描关闭多轴/谐波/过零确认，它们不否决 VALID。本项为合成注入，不代表硬件链路已验证"
+      },
+      "confusion_band_hz": [
+        0.6,
+        0.8
+      ],
+      "hardware_excitation": {
+        "status": "NOT_PROVIDED",
+        "file": "",
+        "excitation_hz": 0.0,
+        "windows": 0,
+        "matched": 0,
+        "reason": "未提供已知频率的激励数据；L2 的注入标定为合成信号，只验证算法"
+      }
+    },
+    "L3_site": {
+      "status": "PENDING",
+      "items": [
+        {
+          "key": "L_m",
+          "label": "索跨长 L (m)",
+          "value": null,
+          "how": "现场钢尺/全站仪量两锚固点净距；斜索取弦长",
+          "why": "T = 4L²μf₁² 中 L 是平方项，误差放大 2 倍"
+        },
+        {
+          "key": "mu_kg_m",
+          "label": "等效线密度 μ (kg/m)",
+          "value": null,
+          "how": "索材合格证线密度 + 附件折算；传感器附加质量约 18.86g 须按安装间距折算进 μ",
+          "why": "附加质量改变局部 μ，直接改变 f₁ 与反算索力"
+        },
+        {
+          "key": "f1_ref_hz",
+          "label": "基准一阶频率 f1_ref (Hz)",
+          "value": null,
+          "how": "张拉到位后用千斤顶/索力计同步读数，取同一时刻的稳定 f₁",
+          "why": "cable_force_idx=(f1/f1_ref)²×100 的分母，未标定时只是相对占位"
+        },
+        {
+          "key": "attach_mass_g",
+          "label": "传感器+夹具附加质量 (g)",
+          "value": null,
+          "how": "电子秤实测整套（含夹具、线、防水壳）",
+          "why": "折算进 μ；忽略会把安装本身带来的频率下移误判为索力损失"
+        }
+      ]
+    }
+  },
+  "data_sufficiency": {
+    "verdict": "INSUFFICIENT",
+    "verdict_meaning": {
+      "INSUFFICIENT": "连 5min 最低要求都没达到，参数仅供参考，禁止投用",
+      "MINIMUM_MET_NOT_COMPLETE": "单段 5min 只够 L1+静止L2，可生成参数但缺口在 WARN 里，需补采",
+      "READY_FOR_INSTALL": "推荐规格已满足（≥3 段/≥15min/已知激励段），参数可安装后直接加载，L3 仍现场填"
+    },
+    "total_static_s": 121.2,
+    "segments": 1,
+    "independent_windows": 4,
+    "p10_se_mg": 0.031,
+    "p10_bias_pct": -3.3,
+    "hardware_excitation": "NOT_PROVIDED",
+    "five_min_static_covers": [
+      "fs/丢帧率、量化台阶、量程饱和",
+      "三轴零偏与安装倾角（单姿态综合偏差）",
+      "与 G0 同口径的本底 RMS",
+      "静止 G0/G1 虚警基线（配合合成白噪交叉验证）",
+      "G2 稳定性门的频率栅格地板"
+    ],
+    "five_min_static_cannot_cover": [
+      "真实机械激励下的标度因数、相位与幅频响应",
+      "夹具谐振、松动、安装附加质量引入的频率漂移",
+      "姿态变更后的本底变化（台架姿态 ≠ 现场姿态）",
+      "零偏温漂（单一温度点）",
+      "L3 绝对物理量：L_m / mu_kg_m / f1_ref_hz / attach_mass_g"
+    ]
+  },
+  "collection_requirements": [
+    {
+      "item": "静止本底",
+      "minimum": "每段 ≥5min 且为 30s 整数倍（如 120s/150s），合计 ≥3 段、≥10 个完整窗，跨 ≥2 个温度点",
+      "why": "5min 仅 10 个独立 30s 窗，p10 本底标准误约 0.02mg；不足 30s 的尾段碎片不参与统计，单段无法覆盖温漂与时段差异"
+    },
+    {
+      "item": "安装姿态",
+      "minimum": "台架按现场安装姿态摆放；装完现场复测静止 ≥2min",
+      "why": "重力投影在三轴分配随姿态变，MEMS 本底与轴/重力方向相关，台架姿态≠现场姿态"
+    },
+    {
+      "item": "已知激励段",
+      "minimum": "振动台/激振器/敲击，≥60s，频率覆盖 0.5~4Hz，记录真值频率",
+      "why": "脚本内 55 组注入是合成信号，只验算法不验硬件链路（标度、相位、夹具谐振、松动）"
+    },
+    {
+      "item": "温度记录",
+      "minimum": "每段记录环境温度；室外至少覆盖低温/高温各一段",
+      "why": "单一温度点无法标定零偏温漂，户外昼夜温差会改变本底"
+    },
+    {
+      "item": "L3 现场量",
+      "minimum": "L_m / mu_kg_m / f1_ref_hz / attach_mass_g 装后实测",
+      "why": "取决于现场几何与张拉工况，台架无法提前取得"
+    }
+  ],
+  "params": {
+    "fs": 10.0,
+    "unit_scale": 1000.0,
+    "window_s": 30.0,
+    "nperseg_s": 8.0,
+    "n_sub": 4,
+    "min_samples": 32,
+    "min_span_s": 10.0,
+    "detrend": true,
+    "despike": true,
+    "refine_f1": true,
+    "spike_win": 7,
+    "spike_nsig": 6.0,
+    "hp_cutoff": 0.3,
+    "f_lo": 0.3,
+    "f_hi": 4.7,
+    "noise_floor_mg": 1.181,
+    "g0_rms_factor": 1.2,
+    "g1_peak_ratio": 10.0,
+    "g2_mode": "band",
+    "g2_band_frac": 0.3,
+    "g2_sub_ratio": 5.0,
+    "g2_min_subs": 3,
+    "g2_cv_max": 0.08,
+    "g3_factor": 2.0,
+    "f1_min_hz": 0.6,
+    "n_peaks": 6,
+    "peak_min_ratio": 3.0,
+    "multi_axis": true,
+    "ma_band_frac": 0.15,
+    "ma_ratio": 5.0,
+    "harmonic_check": true,
+    "harm_ratio": 5.0,
+    "xcheck": true
+  },
+  "site_required": [
+    {
+      "key": "L_m",
+      "label": "索跨长 L (m)",
+      "value": null,
+      "how": "现场钢尺/全站仪量两锚固点净距；斜索取弦长",
+      "why": "T = 4L²μf₁² 中 L 是平方项，误差放大 2 倍"
+    },
+    {
+      "key": "mu_kg_m",
+      "label": "等效线密度 μ (kg/m)",
+      "value": null,
+      "how": "索材合格证线密度 + 附件折算；传感器附加质量约 18.86g 须按安装间距折算进 μ",
+      "why": "附加质量改变局部 μ，直接改变 f₁ 与反算索力"
+    },
+    {
+      "key": "f1_ref_hz",
+      "label": "基准一阶频率 f1_ref (Hz)",
+      "value": null,
+      "how": "张拉到位后用千斤顶/索力计同步读数，取同一时刻的稳定 f₁",
+      "why": "cable_force_idx=(f1/f1_ref)²×100 的分母，未标定时只是相对占位"
+    },
+    {
+      "key": "attach_mass_g",
+      "label": "传感器+夹具附加质量 (g)",
+      "value": null,
+      "how": "电子秤实测整套（含夹具、线、防水壳）",
+      "why": "折算进 μ；忽略会把安装本身带来的频率下移误判为索力损失"
+    }
+  ],
+  "fingerprint": {
+    "axis_columns": [
+      "加速度X(g)",
+      "加速度Y(g)",
+      "加速度Z(g)"
+    ],
+    "rate_hz": 10.0,
+    "range_g": 2.0,
+    "unit_scale": 1000.0,
+    "axis_default": "加速度Z(g)",
+    "window_s": 30.0,
+    "nperseg_s": 8.0
+  },
+  "validity": {
+    "calibrated_on": "2026-11-13",
+    "valid_until": "2027-05-12",
+    "valid_days": 180,
+    "recalibrate_if": [
+      "更换传感器 / 更换安装位置 / 重新拆装夹具",
+      "改变量程(±2/4/8/16g)、输出速率、固件或滤波配置",
+      "更换供电、线缆长度、采集主机或接地方式",
+      "环境温度区间偏离标定时 ±10℃ 以上",
+      "连续 7 天出现 G0 全部 FAIL 或静止段 RMS 漂移 >20%",
+      "超过 valid_until，或传感器受过冲击/进水/维修"
+    ]
+  },
+  "checks": {
+    "passed": [
+      "丢帧/不规则间隔 2.801% < 5%",
+      "各静止段采样率一致",
+      "无量程饱和",
+      "重力模长偏差 -0.02% < 5%",
+      "本底近似白噪 lag1=-0.0431",
+      "G1 沿用生产基线 10，静止 p99.9=2.63 有 3.8× 余量",
+      "G2 未擅自收紧生产基线 8%",
+      "注入标定检出真信号"
+    ],
+    "warnings": [
+      "仅 1 段静止数据：无法覆盖时段/温度/姿态变化，建议 ≥3 段（各 ≥5min，跨 ≥2 个温度点）",
+      "静止总时长 121.2s < 15min：本底 p10 标准误 0.031mg，极值分位数依赖合成白噪交叉验证",
+      "本底采用 p10（本次 4 窗，系统性偏低 -3.3%、标准误 0.031mg），偏低量已由 G0 因子 1.2 补偿",
+      "虚警基线实测仅 4 个独立窗，重采样 37.5× 属伪重复；已用独立合成白噪交叉验证",
+      "无真实激励段验证：S4 的 55 组合成注入只验证算法，不验证标度/相位/夹具谐振/松动",
+      "台架姿态 ≠ 现场安装姿态：装完必须现场复测静止 ≥2min 确认本底",
+      "单一温度点无法标定零偏温漂；户外昼夜温差会改变本底",
+      "静止只有 11 个唯一值、量化台阶 1.0mg，分辨率受量化限制，G1 标定结果对量程敏感",
+      "原始 std 比生产口径本底高 8.14%，DEFAULTS.noise_floor_mg=1.286 属原始 std，已改用同口径标定值",
+      "低频阵风带 [0.3, 0.5, 0.8]Hz 的强慢波会误判 VALID；过渡带混淆区 0.6~0.8Hz 需多轴/跨窗/张力先验补判",
+      "方法固有局限：四门只判有无稳定窄带峰，不判峰的物理来源；全带强单频信号都会 VALID，详见 L2.method_limit",
+      "低频灵敏度下降：0.3Hz 高通与 f_lo 重合，0.2Hz 注入在 5mg 内完全检不出、0.3Hz 需 3mg、0.5Hz 需 2mg；低频检出阈值显著升高是滤波代价。",
+      "L3 绝对物理量未标定：L_m / mu_kg_m / f1_ref_hz / attach_mass_g 必须安装后现场取值，当前索力输出为占位值"
+    ],
+    "failed": [
+      "静止总时长 121.2s ≥ 300s（每台 5min 最低要求）",
+      "独立 30s 窗 4 ≥ 10 个"
+    ]
+  }
+}
