@@ -14,14 +14,14 @@ cameras:
   # image_relative 默认 true，world_3d 默认 false（外参模式在像素点层面用
   # K/dist 反投影，再全图去畸变会重复去畸变）。marker 固定不去畸变。
   - id: pole_cam_01
-    enabled: true
+    enabled: false
     # RTSP 实时流（现场部署示例）：
       # "rtsp://admin:password@192.168.1.64:554/streaming/Channels/101"
     # 当前为联调测试，使用本地视频文件。
     url: "1080/1080.mp4"
     # url: "rtsp://admin:hhjt110110@192.168.1.65:554/streaming/Channels/101"
     task: pole                      # pole = 立柱监测（分割模型，1fps 抽帧）
-    undistort: true                 # true=抽帧后去畸变；false=用原始帧
+    undistort: false                 # true=抽帧后去畸变；false=用原始帧
     # 本摄像头专属标定：内参 K / 畸变 dist / 外参 R,t（OpenCV 约定 Xc = R Xw + t）
     calibration:
       K:
@@ -36,11 +36,11 @@ cameras:
       t: [0.0, 0.0, 5.0]
 
   - id: pole_cam_02
-    enabled: true
+    enabled: false
     # url: "rtsp://admin:hhjt110110@192.168.1.64:554/streaming/Channels/101"
     url: "1080/1080-2.mp4"
     task: pole                      # pole = 立柱监测（分割模型，1fps 抽帧）
-    undistort: true                 # true=抽帧后去畸变；false=用原始帧
+    undistort: false                 # true=抽帧后去畸变；false=用原始帧
     # 本摄像头专属标定：内参 K / 畸变 dist / 外参 R,t（OpenCV 约定 Xc = R Xw + t）
     calibration:
       K:
@@ -57,7 +57,7 @@ cameras:
     #   "rtsp://admin:password@
 
   - id: marker_cam_01
-    enabled: true
+    enabled: false
     # RTSP 实时流（现场部署真实地址，已实测沙箱可直连）：
     # url: "rtsp://admin:hhjt110110@192.168.1.65:554/streaming/Channels/101"
     # 联调测试用的本地视频文件（改回此行即可恢复离线回放）：
@@ -71,7 +71,7 @@ cameras:
   - id: marker_cam_02
     enabled: true
     # url: "rtsp://admin:hhjt110110@192.168.1.64:554/streaming/Channels/101"
-    url: "babiao/static_video.mp4"
+    url: "babiao/外部激励/capture_20261113_161635.mp4"
     task: marker
     undistort: false                # 占位：marker 固定不去畸变，此字段不生效
 # ---------------------------------------------------------------------

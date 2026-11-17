@@ -877,6 +877,9 @@ def build_state(output_dir, pole_cam, marker_cam, cam_info=None, fft_cfg=None):
                 if (info.get("branch") or "") == "pole"] or ([pole_cam] if pole_cam else [])
     marker_ids = [cid for cid, info in (cam_info or {}).items()
                   if (info.get("branch") or "") == "marker"] or ([marker_cam] if marker_cam else [])
+    # 前端左右面板显示只由这里决定：cam_info 来自 load_config 已过滤
+    # cameras[].enabled:false 的清单，所以「该分支有相机」等价于「该分支有 enabled:true 的相机」。
+    out["branches"] = {"pole": bool(pole_ids), "marker": bool(marker_ids)}
 
     if pole_cam:
         pole_cams = {cid: _pole_camera_state(output_dir, cid, cam_info)
@@ -1599,6 +1602,8 @@ HTML_TEMPLATE = r"""<!DOCTYPE html>
     height:14px; border-radius:50%; background:#7d8794; transition:left .15s, background .15s; }
   .ptgl input:checked + .tk { background:#1f6f43; }
   .ptgl input:checked + .tk::after { left:18px; background:#7ee787; }
+  /* 自动模式：不可点击，视觉上弱化但仍能看出当前是否启用 */
+  .ptgl.auto { cursor:default; opacity:.75; }
 </style>
 </head>
 <body>
@@ -1609,7 +1614,7 @@ HTML_TEMPLATE = r"""<!DOCTYPE html>
 <div class="grid">
   <!-- 左：立柱倾角监测 -->
   <div class="panel" id="polePanel">
-    <h2>◧ 立柱倾角监测　<span id="poleStatus" class="badge"></span><label class="ptgl" title="关闭后隐藏本侧立柱监测面板"><input type="checkbox" id="poleShowTgl" checked><span class="tk"></span><span>显示</span></label></h2>
+    <h2>◧ 立柱倾角监测　<span id="poleStatus" class="badge"></span><label class="ptgl auto" title="由 pole 分支相机的 enabled 自动决定，无需手动操作"><input type="checkbox" id="poleShowTgl" checked disabled><span class="tk"></span><span>显示</span></label></h2>
     <div class="viewbar">
       <button class="vbtn active" data-panel="pole" data-view="init">初始状态画面</button>
       <button class="vbtn" data-panel="pole" data-view="live">实时展示画面</button>
@@ -1636,7 +1641,7 @@ HTML_TEMPLATE = r"""<!DOCTYPE html>
   </div>
   <!-- 右：视频测振 -->
   <div class="panel" id="markerPanel">
-    <h2>◨ 视频测振　<span id="markerStatus" class="badge"></span><label class="ptgl" title="关闭后隐藏本侧视频测振面板"><input type="checkbox" id="markerShowTgl" checked><span class="tk"></span><span>显示</span></label></h2>
+    <h2>◨ 视频测振　<span id="markerStatus" class="badge"></span><label class="ptgl auto" title="由 marker 分支相机的 enabled 自动决定，无需手动操作"><input type="checkbox" id="markerShowTgl" checked disabled><span class="tk"></span><span>显示</span></label></h2>
     <div class="viewbar">
       <button class="vbtn active" data-panel="marker" data-view="init">初始状态画面</button>
       <button class="vbtn" data-panel="marker" data-view="live">实时分析界面</button>
@@ -2185,6 +2190,7 @@ function pauseLiveMedia(panel){
 async function tick(){
   let st; try{ st=await (await fetch("/api/state")).json(); }catch(e){ return; }
   window.__state=st;
+  applyBranchPanels(st.branches);
   document.getElementById("clock").textContent=new Date().toLocaleString();
 
   // 初始状态画面（下拉框选中的某一路相机）按需重绘
@@ -2279,50 +2285,26 @@ async function tick(){
     }
   }
 }
-// 左右面板显示开关：关闭隐藏该侧面板；仅剩一侧时独占整行。状态持久化
-// （localStorage 不可用时降级为内存存储，如隐私模式/无 DOM 沙箱）。
-// 隐藏侧的文件视频暂停，避免后台空播。
-function panelToggleStore(){
-  try{
-    const s=window.localStorage;
-    s.setItem("__ptgl_t","1"); s.removeItem("__ptgl_t");
-    return s;
-  }catch(e){
-    const m={};
-    return {getItem:k=>(k in m?m[k]:null), setItem:(k,v)=>{m[k]=String(v);},
-            removeItem:k=>{delete m[k];}};
-  }
-}
-function setupPanelToggles(){
+// 左右面板显示由后端 /api/state 的 branches 自动决定，不再需要人为操作：
+// 该分支有任一 enabled:true 相机 → 显示；该分支相机全为 false → 隐藏。
+// 勾选框降级为只读状态指示（disabled），localStorage 逻辑整体移除。
+function applyBranchPanels(branches){
   const grid=document.querySelector(".grid");
   if(!grid) return;
-  const store=panelToggleStore();
-  function apply(){
-    const poleOn=document.getElementById("poleShowTgl").checked;
-    const markOn=document.getElementById("markerShowTgl").checked;
-    document.getElementById("polePanel").style.display = poleOn ? "" : "none";
-    document.getElementById("markerPanel").style.display = markOn ? "" : "none";
-    grid.style.gridTemplateColumns = (poleOn && markOn) ? "1fr 1fr" : "1fr";
-    store.setItem("poleShow", poleOn ? "1" : "0");
-    store.setItem("markerShow", markOn ? "1" : "0");
-    if(!poleOn){ const v=document.querySelector("#poleLiveMedia video"); if(v && v.pause) v.pause(); }
-    if(!markOn){ const v=document.querySelector("#markerLiveMedia video"); if(v && v.pause) v.pause(); }
-  }
+  const poleOn=!!(branches && branches.pole);
+  const markOn=!!(branches && branches.marker);
   const pt=document.getElementById("poleShowTgl");
   const mt=document.getElementById("markerShowTgl");
-  if(pt){
-    pt.checked = store.getItem("poleShow") !== "0";
-    pt.addEventListener("change", apply);
-  }
-  if(mt){
-    mt.checked = store.getItem("markerShow") !== "0";
-    mt.addEventListener("change", apply);
-  }
-  apply();
+  if(pt) pt.checked=poleOn;
+  if(mt) mt.checked=markOn;
+  document.getElementById("polePanel").style.display = poleOn ? "" : "none";
+  document.getElementById("markerPanel").style.display = markOn ? "" : "none";
+  grid.style.gridTemplateColumns = (poleOn && markOn) ? "1fr 1fr" : "1fr";
+  if(!poleOn){ const v=document.querySelector("#poleLiveMedia video"); if(v && v.pause) v.pause(); }
+  if(!markOn){ const v=document.querySelector("#markerLiveMedia video"); if(v && v.pause) v.pause(); }
 }
 
 setupViewSwitch();
-setupPanelToggles();
 setInterval(tick, 1000); tick();
 </script>
 </body>
