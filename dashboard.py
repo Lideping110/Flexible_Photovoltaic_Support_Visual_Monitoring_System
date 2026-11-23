@@ -316,6 +316,66 @@ def _load_displacement_cached(path: Path, max_lines: int = 200000):
     return rows, t_max, t_min
 
 
+# ---- 靶标门控标定（与主链路 spectrum 共用 gate_core，保证三处同源）----
+_GATE_CFG_CACHE = {}
+
+
+def _gate_cfg(fft_cfg):
+    """从 fft_cfg['calib'] 加载标定；空/不可读 → None（legacy）。按路径缓存。"""
+    from marker_subpixel_tracker.gate_core import load_gate_config
+    path = str((fft_cfg or {}).get("calib") or "")
+    if not path:
+        return None
+    if path not in _GATE_CFG_CACHE:
+        _GATE_CFG_CACHE[path] = load_gate_config(path)
+    return _GATE_CFG_CACHE[path]
+
+
+_DISP_PX_CACHE = {}
+
+
+def _load_displacement_px_cached(path: Path, max_lines: int = 200000):
+    """读取 displacement.jsonl → {pid: [(ts, dx_px, dy_px)]}，用 mm/mm_per_px 反算 px。
+
+    看板与主链路同源要求：标定启用后频谱判定在 px 域，jsonl 只落了 mm 与
+    mm_per_px，按 cum_px = cum_mm / mm_per_px 精确反算（同一线性换算，可逆）。
+    """
+    try:
+        st = path.stat()
+    except OSError:
+        return {}
+    key = str(path)
+    sig = (st.st_mtime_ns, st.st_size)
+    with _DISP_LOCK:
+        hit = _DISP_PX_CACHE.get(key)
+        if hit and hit["sig"] == sig:
+            return hit["series"]
+    seq = {}
+    try:
+        with path.open("r", encoding="utf-8") as f:
+            for ln in f.readlines()[-max_lines:]:
+                ln = ln.strip()
+                if not ln:
+                    continue
+                try:
+                    r = json.loads(ln)
+                except Exception:
+                    continue
+                pid, ts = r.get("pid"), to_f(r.get("ts"))
+                mmp = to_f(r.get("mm_per_px"))
+                dx, dy = to_f(r.get("cum_dx_mm")), to_f(r.get("cum_dy_mm"))
+                if pid is None or ts is None or not mmp or dx is None or dy is None:
+                    continue
+                seq.setdefault(pid, []).append((ts, dx / mmp, dy / mmp))
+    except Exception:
+        return {}
+    rows = {pid: _tail_monotonic(v) for pid, v in seq.items()}
+    rows = {pid: v for pid, v in rows.items() if v}
+    with _DISP_LOCK:
+        _DISP_PX_CACHE[key] = {"sig": sig, "series": rows}
+    return rows
+
+
 def _window_fft(t, y, snr_min):
     """单轴窗口主频：复用推理链路的同一套 FFT（保证与 spectrum.jsonl 数值同源）。"""
     try:
@@ -456,7 +516,7 @@ def _fft_gate(t_lists, window_s: float = 30.0, min_samples: int = 32,
 def _marker_window(mdir: Path, t=None, window_s: float = 30.0,
                    snr_min: float = 5.0, min_samples: int = 32,
                    min_span_s: float = _MARKER_MIN_SPAN_S, f1_ref=None,
-                   flush: bool = False):
+                   flush: bool = False, fft_cfg=None):
     """固定不重叠 window_s 窗口：按播放时刻 t 取「当前已完成/末尾窗口」的曲线与分析。
 
     分段方式与主链路 SpectrumAnalyzer 完全一致（seg = int(t//window_s)），但本函数
@@ -469,6 +529,11 @@ def _marker_window(mdir: Path, t=None, window_s: float = 30.0,
        "spectra":{pid:{axis,freq,power}}, "analysis":{pid:{...}}, ...}
     """
     series_all, t_max, t_min = _load_displacement_cached(mdir / "displacement.jsonl")
+    gate_cfg = _gate_cfg(fft_cfg)
+    # 标定启用时，谱判定须在 px 域（与 spectrum 主链路同源）；jsonl 只落 mm，
+    # 按 cum_px = cum_mm/mm_per_px 精确反算。无标定或反算失败则退 legacy。
+    px_all = (_load_displacement_px_cached(mdir / "displacement.jsonl")
+              if gate_cfg else None)
     if not series_all or t_max is None:
         return {"t": None, "t_max": None, "series": {}, "spectra": {},
                 "analysis": {}, "window_s": window_s, "analysis_updated": None,
@@ -552,8 +617,23 @@ def _marker_window(mdir: Path, t=None, window_s: float = 30.0,
         eligible = (gate_ready and len(win) >= effective_min_samples
                     and span >= effective_need_s - 1e-9)
         # 本看板评估靶标上下振动，主频与频谱统一只使用垂向 dy。
-        sp = (_window_spectrum(ts, [s[2] for s in win], snr_min)
-              if eligible else None)
+        # 标定启用：判定域用 px（与主链路 spectrum 同源）；未启用：legacy 用 mm。
+        if eligible:
+            if gate_cfg and px_all and px_all.get(pid):
+                px_win = [s for s in px_all[pid] if in_fft_window(s)]
+                if px_win:
+                    from marker_subpixel_tracker.spectrum import _segment_spectrum
+                    sp = _segment_spectrum([s[0] for s in px_win],
+                                           [s[2] for s in px_win], snr_min,
+                                           cfg=gate_cfg,
+                                           window_s=W, min_samples=effective_min_samples,
+                                           min_span_s=effective_need_s)
+                else:
+                    sp = None
+            else:
+                sp = _window_spectrum(ts, [s[2] for s in win], snr_min)
+        else:
+            sp = None
         ref = (f1_ref or {}).get(pid)
         if sp is not None:
             spectra[pid] = {"axis": "dy", "freq": sp["freq"], "power": sp["power"]}
@@ -571,6 +651,8 @@ def _marker_window(mdir: Path, t=None, window_s: float = 30.0,
                 "cable_force_idx": _MARKER_PH["cable_force_idx"],
                 "placeholder": True,
                 "reliable": bool(sp["f1_hz"] is not None),
+                "gate_reason": (sp.get("reason") or "") if gate_cfg else "",
+                "gate_mode": "calibrated" if gate_cfg else "legacy",
             }
         else:
             analysis[pid] = {
@@ -834,7 +916,7 @@ def _marker_camera_state(output_dir, cid, cam_info, fft_cfg):
     window_s, snr, min_samples, min_span_s = _fft_values(fft_cfg)
     win = _marker_window(mdir, t=None, window_s=window_s, snr_min=snr,
                          min_samples=min_samples, min_span_s=min_span_s,
-                         f1_ref=f1_ref, flush=flush_latest)
+                         f1_ref=f1_ref, flush=flush_latest, fft_cfg=fft_cfg)
     series = win["series"]
     ready = bool(win["fft_ready"] and series)
     branch = info.get("branch") or "marker"
@@ -1310,7 +1392,7 @@ class Handler:
             snr_min=to_f(self.fft_cfg.get("snr")) or 5.0,
             min_samples=int(to_f(self.fft_cfg.get("min_samples")) or 32),
             min_span_s=to_f(self.fft_cfg.get("min_span_s")) or _MARKER_MIN_SPAN_S,
-            f1_ref=f1_ref, flush=bool(flush))
+            f1_ref=f1_ref, flush=bool(flush), fft_cfg=self.fft_cfg)
         win["cam_id"] = cam
         return win
 
@@ -1565,8 +1647,12 @@ HTML_TEMPLATE = r"""<!DOCTYPE html>
   .panel { background:#111824; border:1px solid #1c2430; border-radius:10px; display:flex; flex-direction:column; overflow:hidden; }
   .panel > h2 { margin:0; padding:8px 12px; font-size:14px; background:#0e1521; border-bottom:1px solid #1c2430; color:#9fd0ff; }
   .panel.alarm > h2 { color:#ff7b72; }
-  .content { flex:1 1 0; min-height:0; overflow:auto; padding:8px 10px; }
-  .media-box { width:100%; height:260px; background:#000; display:flex; align-items:center; justify-content:center; border-radius:8px; overflow:hidden; margin-bottom:8px; }
+  .content { flex:1 1 0; min-height:0; overflow:hidden; padding:8px 10px;
+    display:flex; flex-direction:column; }
+  /* 视频容器：flex:1 自动吃掉面板里除表格外的全部剩余高度——视频 + 下方
+     基准/当前状态表刚好铺满整屏，不用滚动、也不用手调 vh 数字。
+     具体 flex 分配在下方 .viewpane .media-box 规则里。 */
+  .media-box { width:100%; background:#000; display:flex; align-items:center; justify-content:center; border-radius:8px; overflow:hidden; margin-bottom:8px; }
   .media-box img, .media-box video, .media-box canvas { max-width:100%; max-height:100%; object-fit:contain; background:#000; }
   table { width:100%; border-collapse:collapse; font-size:12px; }
   th,td { padding:4px 6px; border-bottom:1px solid #1a2230; text-align:center; }
@@ -1580,9 +1666,15 @@ HTML_TEMPLATE = r"""<!DOCTYPE html>
   .vbtn { background:#111824; color:#c9d4e0; border:1px solid #1c2430; border-radius:8px; padding:4px 12px; font-size:12px; cursor:pointer; }
   .vbtn.active { background:#16202e; border-color:#3fb950; color:#7ee787; }
   .vbtn:hover { border-color:#3fb950; }
-  .media-box { width:100%; height:100%; display:flex; align-items:center; justify-content:center; }
   .media-box img, .media-box video, .media-box canvas { max-width:100%; max-height:100%; object-fit:contain; background:#000; }
-  .viewpane { padding-top:4px; }
+  /* 视图面板用 flex 纵向铺满 .content：视频 flex:1 撑满、表格按内容高度占位，
+     整体正好等于面板可视高度，不产生滚动条。 */
+  .viewpane { padding-top:4px; flex:1 1 0; display:flex; flex-direction:column; min-height:0; }
+  /* flex-basis:0 —— 视频从零开始分配"表格之外的剩余空间"，保证表格永远完整可见 */
+  .viewpane .media-box { flex:1 1 0; min-height:0; }
+  /* 表格/标题等固定内容不被压缩 */
+  .viewpane > .sec-bar, .viewpane > .sec-title, .viewpane > table,
+  .viewpane > .charts, .viewpane > div:last-child { flex-shrink:0; }
   .sec-bar { display:flex; align-items:center; gap:8px; margin:2px 0 6px; }
   .sec-bar label { font-size:12px; color:#7d8794; }
   .camsel { background:#111824; color:#c9d4e0; border:1px solid #1c2430; border-radius:8px; padding:3px 8px; font-size:12px; min-width:170px; }
@@ -2119,7 +2211,8 @@ function setupViewSwitch(){
       const panel=btn.dataset.panel, view=btn.dataset.view;
       document.querySelectorAll(`.vbtn[data-panel="${panel}"]`).forEach(b=>b.classList.toggle("active", b===btn));
       document.querySelectorAll(`.viewpane[data-panel="${panel}"]`).forEach(v=>{
-        v.style.display = (v.dataset.view===view)?"block":"none";
+        // 用 flex 而非 block：viewpane 是纵向 flex 容器，视频 flex:1 撑满剩余高度
+        v.style.display = (v.dataset.view===view)?"flex":"none";
       });
       // 离开实时视图时暂停文件视频，避免后台空播并重置播放联动
       if(view!=="live"){

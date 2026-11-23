@@ -14,11 +14,11 @@ cameras:
   # image_relative 默认 true，world_3d 默认 false（外参模式在像素点层面用
   # K/dist 反投影，再全图去畸变会重复去畸变）。marker 固定不去畸变。
   - id: pole_cam_01
-    enabled: false
+    enabled: true
     # RTSP 实时流（现场部署示例）：
       # "rtsp://admin:password@192.168.1.64:554/streaming/Channels/101"
     # 当前为联调测试，使用本地视频文件。
-    url: "1080/1080.mp4"
+    url: "1080/heng.mp4"
     # url: "rtsp://admin:hhjt110110@192.168.1.65:554/streaming/Channels/101"
     task: pole                      # pole = 立柱监测（分割模型，1fps 抽帧）
     undistort: false                 # true=抽帧后去畸变；false=用原始帧
@@ -36,9 +36,9 @@ cameras:
       t: [0.0, 0.0, 5.0]
 
   - id: pole_cam_02
-    enabled: false
+    enabled: true
     # url: "rtsp://admin:hhjt110110@192.168.1.64:554/streaming/Channels/101"
-    url: "1080/1080-2.mp4"
+    url: "1080/zong.mp4"
     task: pole                      # pole = 立柱监测（分割模型，1fps 抽帧）
     undistort: false                 # true=抽帧后去畸变；false=用原始帧
     # 本摄像头专属标定：内参 K / 畸变 dist / 外参 R,t（OpenCV 约定 Xc = R Xw + t）
@@ -69,7 +69,7 @@ cameras:
     # 也不做去畸变——请勿在此挂 calibration 块，否则只会误导、不被加载。
     
   - id: marker_cam_02
-    enabled: true
+    enabled: false
     # url: "rtsp://admin:hhjt110110@192.168.1.64:554/streaming/Channels/101"
     url: "babiao/外部激励/capture_20261113_161635.mp4"
     task: marker
@@ -80,8 +80,8 @@ cameras:
 models:
   pole_seg:
     # 立柱实例分割模型：优先 OpenVINO 导出目录（含 .xml，dynamic 支持多 batch），回退 .pt 权重
-    openvino_dir: "./models/pole26s_seg_openvino_model"
-    weights: "./models/pole26s_seg.pt"
+    openvino_dir: "./models/model_openvino_model"
+    weights: "./models/model.pt"
     confidence: 0.25
     class_id: 0
     device: "intel:gpu"                   # 有 CUDA 可改 "0"；OpenVINO 时用 "cpu" 或 "intel:gpu"
@@ -119,6 +119,9 @@ pole:
     min_ray_plane_angle_deg: 5.0    # 仅 world_3d 使用
     max_centerline_residual_px: 4.0
     max_endpoint_spread_px: 4.0
+    # 锚固端时间稳定性：bottom（杆底锚固点）帧间移动的中位步长超过此值
+    # 才开始扣分；top 是自由端（真实倾斜信号），不参与时间惩罚。
+    bottom_jitter_tolerance_px: 2.0
     max_length_error_ratio: 0.03    # 仅 world_3d 使用
     quality_weights:
       inlier_ratio: 0.30
@@ -149,6 +152,11 @@ marker:
     # 每 window_s 秒一个窗口做一次主频提取（固定不重叠分段）
     window_s: 30.0
     snr: 5.0                        # 主频接受的最小信噪比
+    # 门控标定 JSON（video_calibration/calibrate_video_single.py 产出）。
+    # 留空 = 走 legacy（单段 FFT + SNR 门，现有行为不变）；
+    # 填路径 = 启用 G0~G3 + 丢帧率门 + ID 连续性门（阈值为 px 域，来自标定）。
+    # 建议等静止视频标定 READY 后再填；相对路径按项目根解析。
+    calib: ""
     min_samples: 32                 # 窗口内最少样本数，不足不出结果
     min_span_s: 10.0                # 窗口内样本"实际跨度"下限（秒）。看板"频谱图出图"
                                     # 与"主频取值"共用这一条门限（须与 min_samples 同时满足）：

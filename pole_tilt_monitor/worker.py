@@ -38,6 +38,7 @@ def _build_pole_monitor(calib_path, geom, bc, fc, relative_mode):
         quality_weights=geom.get("quality_weights"),
         max_centerline_residual_px=geom.get("max_centerline_residual_px", 4.0),
         max_endpoint_spread_px=geom.get("max_endpoint_spread_px", 4.0),
+        bottom_jitter_tolerance_px=geom.get("bottom_jitter_tolerance_px", 2.0),
         body_trim_ratio=geom.get("body_trim_ratio", 0.10),
     )
     if relative_mode:

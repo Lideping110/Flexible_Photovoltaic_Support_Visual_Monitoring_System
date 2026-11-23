@@ -11,6 +11,7 @@ from datetime import datetime
 import numpy as np
 
 from utils.common import SENTINEL, log, put_blocking
+from .gate_core import check_fingerprint, evaluate_window, load_gate_config
 
 
 def _clip_stamp():
@@ -18,60 +19,39 @@ def _clip_stamp():
     return datetime.now().strftime("%Y%m%d_%H%M%S_%f")
 
 
-def _segment_spectrum(t, y, snr_min, nb=200):
-    """对一段时序做 FFT，返回完整结果字典或 None（SNR 不达标 / 样本不足）。
+def _opt_float(v):
+    """可选数值字段：None 保留 None，其余转 float（新消息缺字段时兜底）。"""
+    return None if v is None else float(v)
 
-    与主链路固定窗分段（SpectrumAnalyzer._finalize）共用同一套功率谱 / SNR 算法，
-    仅额外把功率谱降采样到 nb 个点（freq/power）供前端直接画曲线，无需前端再算一次 FFT。
 
-    返回 {"freq":[...], "power":[...], "f1_hz":float|None, "snr":float, "n":int, "dt":float}
-    f1_hz 为 None 表示 SNR 未达标（被门控拒绝，与主链路口径一致）。
+def _segment_spectrum(t, y, snr_min, nb=200, *, cfg=None, meta=None,
+                      window_s=None, min_samples=None, min_span_s=None):
+    """对一段时序做谱分析，返回完整结果字典或 None（样本不足）。
+
+    兼容旧签名 _segment_spectrum(t, y, snr_min)：cfg=None 时走 legacy 口径
+    （单段 FFT + SNR 门），现有看板行为零变化。cfg 为 load_gate_config() 的
+    返回值时启用四门+丢帧率+ID 连续性门，判定在 px 域、输出幅值在 mm 域。
+
+    返回字段保持旧结构（freq/power/f1_hz/snr/n/dt），另加：
+      max_amp_mm, gates, reason, valid, mode
+    f1_hz=None 表示门控未通过（与旧 SNR 未达标语义一致）。
     """
-    t = np.asarray(t, dtype=np.float64)
-    y = np.asarray(y, dtype=np.float64)
-    n = len(t)
-    if n < 4:
+    # legacy 路径：y 既作 mm 也作 px（不影响，legacy 只算 FFT）
+    r = evaluate_window(t, y, y, snr_min, cfg=cfg, meta=meta,
+                        window_s=window_s, min_samples=min_samples,
+                        min_span_s=min_span_s)
+    if r is None or r.get("n", 0) < 4 or r.get("reason") in (
+            "样本不足", "时间戳异常", "谱长度不足"):
         return None
-    dt = float(np.median(np.diff(t)))
-    if dt <= 0:
-        return None
-    y = y - y.mean()
-    spectrum = np.abs(np.fft.rfft(y)) ** 2
-    freqs = np.fft.rfftfreq(n, d=dt)
-    if len(spectrum) < 3:
-        return None
-    body = spectrum[1:]  # 排除直流
-    if body.size == 0:
-        return None
-    k = int(np.argmax(body)) + 1
-    peak_power = float(spectrum[k])
-    noise = float(np.median(body))
-    snr = (peak_power / noise) if noise > 0 else float("inf")
-    f1 = float(freqs[k]) if not (snr < float(snr_min) or freqs[k] <= 0) else None
-    # 降采样到 nb 个点供画曲线（保持 0~Nyquist 的频率覆盖）
-    if len(freqs) > nb:
-        idx = np.linspace(0, len(freqs) - 1, nb).astype(int)
-        f_d = freqs[idx]
-        p_d = spectrum[idx]
-    else:
-        f_d = freqs
-        p_d = spectrum
-    return {
-        "freq": [float(x) for x in f_d],
-        "power": [float(x) for x in p_d],
-        "f1_hz": f1,
-        "snr": snr,
-        "n": int(n),
-        "dt": dt,
-    }
+    return r
 
 
-def _segment_fft(t, y, snr_min):
-    """对一段时序做 FFT，返回 (f1_hz, snr, n) 或 None（SNR 不达标）。
+def _segment_fft(t, y, snr_min, **kwargs):
+    """对一段时序做谱，返回 (f1_hz, snr, n) 或 None（门控未通过）。
 
-    现委托 _segment_spectrum 实现，保证与「功率谱下发前端」走同一条算法（口径零分叉）。
+    委托 _segment_spectrum，保证「主频 / 功率谱下发前端 / 标定门控」零分叉。
     """
-    r = _segment_spectrum(t, y, snr_min)
+    r = _segment_spectrum(t, y, snr_min, **kwargs)
     if r is None:
         return None
     return r["f1_hz"], r["snr"], r["n"]
@@ -84,8 +64,9 @@ def run_spectrum_analyzer(window_s: float, snr_min: float, min_samples: int,
                           placeholder_deflection=0.0,
                           placeholder_cable_force=100.0,
                           realtime_cam_ids=None, clip_q=None,
-                          output_dir="output", file_sources=None):
-    """主频分析进程入口。"""
+                          output_dir="output", file_sources=None,
+                          gate_config=None):
+    """主频分析进程入口。gate_config=load_gate_config() 返回值；None 走 legacy。"""
     tag = "spectrum"
     window = float(window_s)
     span_need = (min(float(min_span_s), window)
@@ -95,59 +76,75 @@ def run_spectrum_analyzer(window_s: float, snr_min: float, min_samples: int,
     cable_force_threshold = float(cable_force_threshold)
     placeholder_deflection = float(placeholder_deflection)
     placeholder_cable_force = float(placeholder_cable_force)
-    # (cam_id, pid) -> {"samples": [(t, dx, dy)], "last_seg": int}
+    # (cam_id, pid) -> {"samples": [dict], "last_seg": int}
+    # sample dict: t, dx_mm, dy_mm, dx_px, dy_px, frame_id, raw_track_id, continuous
     buffers = {}
+    _gate_mode = "calibrated" if gate_config else "legacy"
     log(tag, f"启动，窗口 {window}s, SNR>={snr_min}, 最少 {min_samples} 样本"
-             f", 最小跨度 {span_need:g}s"
-             f", 振幅报警阈值={amp_threshold:g}mm"
-             f", 挠度报警阈值={deflection_threshold:g}mm"
-             f", 索力报警阈值={cable_force_threshold:g}"
-             f"（挠度/索力当前为占位值，未建模）")
+             f", 最小跨度 {span_need:g}s, 门控={_gate_mode}"
+             f"(标定={gate_config.get('path') if gate_config else '无，走 legacy'})"
+             f", 振幅报警阈值={amp_threshold:g}mm")
+    if gate_config:
+        for w in check_fingerprint(gate_config, 1.0 / max(
+                float(gate_config.get("fingerprint", {}).get("rate_hz") or 25.0), 1.0)):
+            log(tag, f"[标定告警] {w}")
 
     def _finalize(key, seg, allow_partial=False):
         buf = buffers.get(key)
         if buf is None:
             return
         t0, t1 = seg * window, (seg + 1) * window
-        samples = [(t, dx, dy) for t, dx, dy in buf["samples"]
-                   if t0 <= t < t1]
-        buf["samples"] = [(t, dx, dy) for t, dx, dy in buf["samples"] if t >= t1]
+        samples = [s for s in buf["samples"] if t0 <= s["t"] < t1]
+        buf["samples"] = [s for s in buf["samples"] if s["t"] >= t1]
         if not samples:
             return
         cam_id, pid = key
-        # 真实位移幅值（mm）：本窗内累计位移模长的最大值（与看板"最大振幅"同源，
-        # 不依赖 mm/px——cum_dx_mm/cum_dy_mm 已是毫米量纲）。
-        amp = float(max((dx * dx + dy * dy) ** 0.5 for _, dx, dy in samples))
+        # 真实位移幅值（mm）：本窗内累计位移模长最大值（与看板同源）。
+        amp = float(max((s["dx_mm"] ** 2 + s["dy_mm"] ** 2) ** 0.5 for s in samples))
         amp_alarm = amp_threshold > 0 and amp >= amp_threshold
-        # 主频取 SNR 更高的那条轴（与看板口径一致：索力/主频都按 SNR 选轴）
+        # 主频取 SNR 更高的轴（legacy）或第一个通过四门的轴（calibrated）。
         best = {"axis": None, "f1": None, "snr": -1.0}
+        best_gates = None
         # 原始频谱文件保留两个方向；Dashboard 展示层固定选择 dy（上下振动）。
-        for axis, idx in (("dx", 1), ("dy", 2)):
-            ts = [s[0] for s in samples]
-            ys = [s[idx] for s in samples]
+        for axis, k_mm, k_px in (("dx", "dx_mm", "dx_px"), ("dy", "dy_mm", "dy_px")):
+            ts = [s["t"] for s in samples]
+            ys_mm = [s[k_mm] for s in samples]
+            ys_px = [s.get(k_px) for s in samples]
+            if gate_config and (any(v is None for v in ys_px)):
+                ys_px = ys_mm  # 旧消息无 px 字段时退化为 mm（标定域失配风险，记 detail）
+            elif not ys_px or any(v is None for v in ys_px):
+                ys_px = ys_mm
             # EOF 尾段按实际样本计算，至少保留 FFT 所需的 4 个点。
             if len(ts) < (4 if allow_partial else min_samples):
                 continue
-            # min_samples 只约束数量；高频或突发重采样可能在很短的时间
-            # 内凑够数量，仍不能形成可靠的低频谱。Dashboard 使用同一门限。
             if not allow_partial and span_need > 0.0 and (len(ts) < 2 or
                                     (ts[-1] - ts[0]) < span_need - 1e-9):
                 continue
-            r = _segment_fft(ts, ys, snr_min)
+            meta = {"frame_id": [s.get("frame_id") for s in samples],
+                    "raw_track_id": [s.get("raw_track_id") for s in samples],
+                    "continuous": [s.get("continuous") for s in samples]}
+            r = _segment_spectrum(ts, ys_px, snr_min, cfg=gate_config, meta=meta,
+                                  window_s=window, min_samples=min_samples,
+                                  min_span_s=span_need)
             if r is None:
                 continue
-            f1, snr, n = r
-            result_t1 = samples[-1][0] if allow_partial else t1
+            f1, snr, n = r["f1_hz"], r["snr"], r["n"]
+            result_t1 = samples[-1]["t"] if allow_partial else t1
+            data = {"pid": pid, "axis": axis, "t0": t0, "t1": result_t1,
+                    "f1_hz": f1, "snr": snr, "n_samples": n}
+            if gate_config:
+                data["gates"] = r.get("gates") or {}
+                data["gate_reason"] = r.get("reason") or ""
+                data["mode"] = "calibrated"
+                data["max_amp_mm"] = r.get("max_amp_mm")
             put_blocking(result_q, {
                 "branch": "marker", "kind": "spectrum", "cam_id": cam_id,
                 "ts": result_t1,  # 尾段记录实际终点，而非虚构的整窗终点
-                "data": {"pid": pid, "axis": axis, "t0": t0, "t1": result_t1,
-                         "f1_hz": f1, "snr": snr, "n_samples": n},
+                "data": data,
             })
-            # 仅在"通过该轴门控且有有限信噪比"时才参与选轴，避免某轴平动(噪声≈0
-            # 导致 SNR→inf)反而压过真实有信号轴、报出虚假主频。
             if f1 is not None and snr == snr and snr < 1e300 and snr > best["snr"]:
                 best = {"axis": axis, "f1": f1, "snr": snr}
+                best_gates = r.get("gates")
         # ---- 三种振动报警条件（共享同一窗口的 clip 与分析数据）----
         # 振幅为真实量；挠度/索力物理模型未定，保留占位值并显式标注。
         # 三个阈值沿用振幅约定（>0 启用，<=0 关闭）。任一条件触发即在该窗口
@@ -164,7 +161,7 @@ def run_spectrum_analyzer(window_s: float, snr_min: float, min_samples: int,
             #    （保持原编码，不转 web）。
             # 三个条件任一触发都复用同一窗口片段，切窗请求每个窗口只发一次。
             seg_id = f"{cam_id}_{pid}_w{seg}"
-            result_t1 = samples[-1][0] if allow_partial else t1
+            result_t1 = samples[-1]["t"] if allow_partial else t1
             is_rt = bool(realtime_cam_ids and cam_id in realtime_cam_ids)
             source = "realtime" if is_rt else "file"
             clip_url = None
@@ -290,13 +287,23 @@ def run_spectrum_analyzer(window_s: float, snr_min: float, min_samples: int,
                 for k in range(buf["last_seg"], seg):
                     _finalize(key, k)
                 buf["last_seg"] = seg
-            buf["samples"].append((float(item["t"]),
-                                   float(item["dx_mm"]), float(item["dy_mm"])))
+            # 整份透传：新增的 px/frame_id/raw_track_id/continuous 供门控使用，
+            # 旧 worker 发来的消息缺字段时用 None 兜底，gate_core 会判 SKIP 或退化。
+            buf["samples"].append({
+                "t": float(item["t"]),
+                "dx_mm": float(item["dx_mm"]), "dy_mm": float(item["dy_mm"]),
+                "dx_px": _opt_float(item.get("dx_px")),
+                "dy_px": _opt_float(item.get("dy_px")),
+                "frame_id": item.get("frame_id"),
+                "raw_track_id": item.get("raw_track_id"),
+                "continuous": item.get("continuous"),
+            })
     finally:
         # 冲刷所有已结束窗口
         for key in list(buffers.keys()):
             buf = buffers[key]
-            for k in range(buf["last_seg"], int(buf["samples"][-1][0] // window) + 1
+            for k in range(buf["last_seg"],
+                           int(buf["samples"][-1]["t"] // window) + 1
                            if buf["samples"] else buf["last_seg"] + 1):
                 _finalize(key, k, allow_partial=True)
         log(tag, "退出")

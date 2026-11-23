@@ -414,10 +414,20 @@ def run_marker_inference(cfg: dict, cameras: list, frame_queues: dict, result_q,
                         frame_records.append(record)
                         if cum_dx is not None:
                             # 同一队列承载 EOF 控制消息，不能通过丢旧策略将其冲掉。
+                            # 元数据随样本整份透传（禁止白名单遗漏）：
+                            # px 用于相机级本底判定（mm 换算会因各靶标 mm_per_px
+                            # 不同而把本底拉开 1.4x）；frame_id/raw_track_id/
+                            # continuous 供 spectrum 的丢帧率门与 ID 连续性门使用。
                             put_backpressure(spectrum_q, {
                                 "cam_id": cam_id, "pid": pid,
                                 "t": float(msg["ts"]),
                                 "dx_mm": cum_dx, "dy_mm": cum_dy,
+                                "dx_px": float(center[0] - cal["ref"][0]),
+                                "dy_px": float(center[1] - cal["ref"][1]),
+                                "mm_per_px": float(cal["mm_per_px"]),
+                                "frame_id": int(msg["frame_id"]),
+                                "raw_track_id": int(det["id"]),
+                                "continuous": bool(continuous),
                             }, stop_event)
 
                     # 发布本帧实际输出的目标集合；空集合也有意义，Recorder

@@ -28,6 +28,30 @@ class EMA:
         return self.value.copy()
 
 
+def bottom_jitter_score(bot_hist, tol_px, scale_px):
+    """锚固端（杆底）时间稳定性评分。
+
+    物理先验：立柱底部锚固于地面，bottom 的帧间移动只可能来自检测噪声
+    或相机位移，两者都应惩罚；top 是自由端，其移动就是被测量本身
+    （真实倾斜），不参与时间惩罚——这与旧版"两端点绝对位置 spread 一起
+    惩罚"有本质区别（旧版会把真实倾斜误判为 INVALID：杆动得越厉害
+    越无效，与监测目的相悖）。
+
+    统计量用一阶差分的 median 而非 std：单帧尖峰只污染一个差分值，
+    median 直接忽略、窗口立即恢复；std 会被尖峰拉高整个 10 帧窗口，
+    这是旧版"一次跳变、长期 INVALID"的直接来源。
+
+    返回 (score, jitter_px)；历史不足 3 帧时不惩罚（返回 1.0, 0.0）。
+    """
+    if len(bot_hist) < 3:
+        return 1.0, 0.0
+    d = np.abs(np.diff(np.asarray(bot_hist, dtype=float), axis=0))
+    step = np.linalg.norm(d, axis=1)
+    jitter = float(np.median(step))
+    score = float(np.exp(-max(0.0, jitter - tol_px) / max(scale_px, 1e-6)))
+    return score, jitter
+
+
 class PoleMonitor:
     def __init__(self, calib_path, pole_length, ground_z,
                  endpoint_ratio=0.10,
@@ -40,6 +64,7 @@ class PoleMonitor:
                  min_ray_plane_angle_deg=5.0,
                  max_centerline_residual_px=4.0,
                  max_endpoint_spread_px=4.0,
+                 bottom_jitter_tolerance_px=2.0,
                  max_length_error_ratio=0.03,
                  body_trim_ratio=0.10):
 
@@ -59,13 +84,14 @@ class PoleMonitor:
         self.min_ray_plane_angle_deg = float(min_ray_plane_angle_deg)
         self.max_centerline_residual_px = float(max_centerline_residual_px)
         self.max_endpoint_spread_px = float(max_endpoint_spread_px)
+        self.bottom_jitter_tolerance_px = float(bottom_jitter_tolerance_px)
         self.max_length_error_ratio = float(max_length_error_ratio)
         self.body_trim_ratio = float(body_trim_ratio)
 
         self.history = defaultdict(lambda: deque(maxlen=self.baseline_frames))
         self.baseline = {}
         self.ema = defaultdict(lambda: EMA(ema_alpha))
-        self.endpoint_history = defaultdict(lambda: deque(maxlen=10))
+        self.bottom_history = defaultdict(lambda: deque(maxlen=10))
         self.line_history = defaultdict(lambda: deque(maxlen=self.baseline_frames))
         # Video frame that best represents the final baseline line.
         self.baseline_frame_id = {}
@@ -196,19 +222,21 @@ class PoleMonitor:
             return None
         m["frame_id"] = frame_id
 
-        # Temporal endpoint stability is evaluated per tracked pole.  It is
-        # deliberately part of the gate so a suddenly jumping endpoint is
-        # reported as INVALID instead of becoming a precise-looking outlier.
-        hist = self.endpoint_history[pole_id]
-        hist.append(np.r_[m["top"], m["bottom"]])
-        if len(hist) >= 3:
-            spread = float(np.mean(np.std(np.asarray(hist), axis=0)))
-            temporal_score = float(np.exp(-spread /
-                                          max(self.max_endpoint_spread_px, 1e-6)))
+        # 锚固端时间稳定性：只考察 bottom（杆底锚固，动即异常）；
+        # top 是被测量本身（真实倾斜），不参与时间惩罚，其单帧几何
+        # 质量已由 RANSAC inlier/residual/top_spread 把关。
+        # 旧版把两端点绝对位置的 spread 一起惩罚，真实倾斜（top 快速
+        # 移动）被误判 INVALID，与监测目的相悖（2026-11-20 实测修正）。
+        bot_hist = self.bottom_history[pole_id]
+        bot_hist.append(np.asarray(m["bottom"], dtype=float))
+        temporal_score, jitter_px = bottom_jitter_score(
+            bot_hist, self.bottom_jitter_tolerance_px,
+            self.max_endpoint_spread_px)
+        if len(bot_hist) >= 3:
             qc = m["quality_components"]
-            qc["temporal_endpoint_spread_px"] = spread
-            qc["top_point_stability"] = min(qc["top_point_stability"], temporal_score)
-            qc["bottom_point_stability"] = min(qc["bottom_point_stability"], temporal_score)
+            qc["bottom_jitter_px"] = jitter_px
+            qc["bottom_point_stability"] = min(qc["bottom_point_stability"],
+                                               temporal_score)
             # Recompute weighted score after temporal evidence is available.
             vals = {"inlier_ratio": qc["ransac_inlier_ratio"],
                     "centerline_residual": qc["centerline_residual_score"],
@@ -279,6 +307,7 @@ class ImageRelativePoleMonitor(PoleMonitor):
                  quality_threshold=0.60, quality_weights=None,
                  max_centerline_residual_px=4.0,
                  max_endpoint_spread_px=4.0,
+                 bottom_jitter_tolerance_px=2.0,
                  body_trim_ratio=0.10):
         self.K, self.dist = load_intrinsics(calib_path)
         self.endpoint_ratio = endpoint_ratio
@@ -297,11 +326,12 @@ class ImageRelativePoleMonitor(PoleMonitor):
         self.quality_weights["length_constraint"] = 0.0
         self.max_centerline_residual_px = float(max_centerline_residual_px)
         self.max_endpoint_spread_px = float(max_endpoint_spread_px)
+        self.bottom_jitter_tolerance_px = float(bottom_jitter_tolerance_px)
         self.body_trim_ratio = float(body_trim_ratio)
         self.history = defaultdict(lambda: deque(maxlen=self.baseline_frames))
         self.baseline = {}
         self.ema = defaultdict(lambda: EMA(ema_alpha))
-        self.endpoint_history = defaultdict(lambda: deque(maxlen=10))
+        self.bottom_history = defaultdict(lambda: deque(maxlen=10))
         self.line_history = defaultdict(lambda: deque(maxlen=self.baseline_frames))
         # Frame id that best represents the final baseline line.
         self.baseline_frame_id = {}
@@ -415,16 +445,19 @@ class ImageRelativePoleMonitor(PoleMonitor):
             return None
         m["frame_id"] = frame_id
 
-        # Temporal endpoint stability is evaluated before accepting a frame.
-        hist = self.endpoint_history[pole_id]
-        hist.append(np.r_[m["top"], m["bottom"]])
-        if len(hist) >= 3:
-            spread = float(np.mean(np.std(np.asarray(hist), axis=0)))
-            temporal_score = float(np.exp(-spread / max(self.max_endpoint_spread_px, 1e-6)))
+        # 锚固端时间稳定性：只考察 bottom（与 PoleMonitor 同一判定，
+        # top 的移动是被测量本身，不参与时间惩罚——旧版两端点 spread
+        # 一起惩罚，真实倾斜全被判 INVALID，见 bottom_jitter_score 文档）。
+        bot_hist = self.bottom_history[pole_id]
+        bot_hist.append(np.asarray(m["bottom"], dtype=float))
+        temporal_score, jitter_px = bottom_jitter_score(
+            bot_hist, self.bottom_jitter_tolerance_px,
+            self.max_endpoint_spread_px)
+        if len(bot_hist) >= 3:
             qc = m["quality_components"]
-            qc["temporal_endpoint_spread_px"] = spread
-            qc["top_point_stability"] = min(qc["top_point_stability"], temporal_score)
-            qc["bottom_point_stability"] = min(qc["bottom_point_stability"], temporal_score)
+            qc["bottom_jitter_px"] = jitter_px
+            qc["bottom_point_stability"] = min(qc["bottom_point_stability"],
+                                               temporal_score)
             vals = {"inlier_ratio": qc["ransac_inlier_ratio"],
                     "centerline_residual": qc["centerline_residual_score"],
                     "top_stability": qc["top_point_stability"],
@@ -500,7 +533,7 @@ def create_csv(path):
         "Pb_x","Pb_y","Pb_z","Pt_x","Pt_y","Pt_z",
         "quality","status","ransac_inlier_ratio","centerline_residual_px",
         "top_point_stability","bottom_point_stability","ray_ground_angle_deg",
-        "top_length_constraint_error_ratio","temporal_endpoint_spread_px"
+        "top_length_constraint_error_ratio","bottom_jitter_px"
     ])
     return f,w
 
@@ -523,5 +556,5 @@ def write_csv(w, frame_id, fps, pole_id, m):
         m.get("quality_components", {}).get("bottom_point_stability", float("nan")),
         m.get("quality_components", {}).get("ray_ground_angle_deg", float("nan")),
         m.get("quality_components", {}).get("top_length_constraint_error_ratio", float("nan")),
-        m.get("quality_components", {}).get("temporal_endpoint_spread_px", float("nan"))
+        m.get("quality_components", {}).get("bottom_jitter_px", float("nan"))
     ])

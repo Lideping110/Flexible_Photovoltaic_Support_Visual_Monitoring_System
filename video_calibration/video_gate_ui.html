@@ -1,0 +1,429 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>靶标视频主频提取 · 门控验证界面</title>
+<style>
+  :root{
+    --bg:#f5f7fa; --card:#fff; --line:#e3e7ee; --line2:#eef1f6;
+    --tx:#1c2430; --tx2:#5d6878; --tx3:#8b95a5;
+    --blue:#2f6feb; --blue-bg:#eaf1ff; --green:#0f8a5f; --green-bg:#e8f7f0;
+    --red:#d04a4a; --red-bg:#fdeeee; --amber:#b7791f; --amber-bg:#fff5e2;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--tx);
+       font:13px/1.6 -apple-system,BlinkMacSystemFont,"Segoe UI","Microsoft YaHei",sans-serif}
+  header{padding:12px 20px;background:var(--card);border-bottom:1px solid var(--line)}
+  header h1{margin:0;font-size:17px;font-weight:600}
+  header p{margin:3px 0 0;color:var(--tx2);font-size:12px}
+  .main{display:flex;gap:14px;padding:14px;align-items:flex-start}
+  .col{flex:1;min-width:0;background:var(--card);border:1px solid var(--line);
+       border-radius:12px;padding:14px;display:flex;flex-direction:column;gap:10px}
+  .col h2{margin:0;font-size:15px;font-weight:600;padding-bottom:9px;border-bottom:1px solid var(--line2)}
+  .ctrl{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
+  .ctrl label{color:var(--tx2);font-size:12px;white-space:nowrap}
+  input[type=file]{flex:1;min-width:150px;font-size:12px}
+  input[type=number],select{padding:5px 7px;border:1px solid var(--line);border-radius:6px;
+      background:#fff;color:var(--tx);font-size:12px;font-family:inherit}
+  select{min-width:220px;max-width:100%}
+  .btn{display:inline-block;padding:6px 13px;border:1px solid var(--blue);border-radius:6px;
+       background:var(--blue);color:#fff;font-size:12px;cursor:pointer;font-family:inherit}
+  .btn:hover{filter:brightness(1.07)}
+  .btn.ghost{background:#fff;color:var(--tx2);border-color:var(--line)}
+  .btn:disabled{opacity:.55;cursor:not-allowed}
+  .msg{font-size:12px;color:var(--tx2);min-height:18px}
+  .msg.err{color:var(--red)}
+  .msg.ok{color:var(--green)}
+  .tabs{display:flex;gap:4px;border-bottom:1px solid var(--line2)}
+  .tabs button{border:none;background:none;padding:6px 10px;font-size:12px;cursor:pointer;
+      color:var(--tx2);border-bottom:2px solid transparent;font-family:inherit}
+  .tabs button.on{color:var(--blue);border-bottom-color:var(--blue);font-weight:600}
+  .hide{display:none}
+  .grid{display:grid;grid-template-columns:repeat(2,1fr);gap:7px 10px}
+  .grid label{color:var(--tx2);font-size:11px;display:flex;align-items:center;
+      justify-content:space-between;gap:6px}
+  .grid input{width:88px}
+  .card{background:#fafbfd;border:1px solid var(--line2);border-radius:8px;padding:9px 11px}
+  .card h3{margin:0 0 6px;font-size:12px;font-weight:600;color:var(--tx2)}
+  .kv{font-size:11px;color:var(--tx2);line-height:1.7;word-break:break-all}
+  .kv b{color:var(--tx);font-weight:600}
+  table{border-collapse:collapse;width:100%;font-size:11px;white-space:nowrap}
+  th,td{padding:4px 7px;border-bottom:1px solid var(--line2);text-align:right}
+  th{background:#fafbfd;color:var(--tx2);font-weight:500;position:sticky;top:0}
+  th:first-child,td:first-child{text-align:left}
+  .tag{display:inline-block;padding:0 5px;border-radius:3px;font-size:10px;font-weight:600;margin-right:3px}
+  .tag.pass{background:var(--green-bg);color:var(--green)}
+  .tag.fail{background:var(--red-bg);color:var(--red)}
+  .tag.skip{background:#f1f3f7;color:var(--tx3)}
+  .tag.valid{background:var(--green-bg);color:var(--green)}
+  .tag.invalid{background:var(--red-bg);color:var(--red)}
+  .result{margin:0 14px 16px;background:var(--card);border:1px solid var(--line);
+      border-radius:12px;padding:14px;display:none}
+  .kpis{display:grid;grid-template-columns:repeat(5,1fr);gap:8px}
+  .kpi{background:#fafbfd;border:1px solid var(--line2);border-radius:8px;padding:8px 10px}
+  .kpi .k{font-size:11px;color:var(--tx3)}
+  .kpi .v{font-size:18px;font-weight:600;margin-top:2px}
+  .kpi .s{font-size:11px;color:var(--tx2)}
+  .sect{margin-top:12px}
+  .sect h3{margin:0 0 7px;font-size:13px;font-weight:600}
+  canvas{width:100%;height:180px;display:block;border:1px solid var(--line2);border-radius:8px}
+  .warn{padding:7px 10px;border-radius:6px;background:var(--amber-bg);color:#8a5d10;
+      font-size:11px;margin-top:7px}
+  .wrap{overflow:auto;max-height:280px;border:1px solid var(--line2);border-radius:8px}
+  .bar{height:7px;background:var(--line2);border-radius:4px;overflow:hidden;margin-top:5px}
+  .bar>i{display:block;height:100%;background:var(--blue);width:0;transition:width .2s}
+  a{color:var(--blue);font-size:12px}
+  @media(max-width:1000px){.main{flex-direction:column}.kpis{grid-template-columns:repeat(2,1fr)}}
+</style>
+</head>
+<body>
+<header>
+  <h1>靶标视频主频提取 · 门控验证界面</h1>
+  <p>上传真正有激励的靶标视频，跑「检测 → 亚像素定位 → mm 自标定 → 累计位移 → 固定窗 FFT」，提取真实主频；
+     也可直接上传主链路产出的 displacement.jsonl 复核。标定 JSON 决定走 legacy 还是六门口径。</p>
+</header>
+
+<div class="main">
+  <section class="col">
+    <h2>1 · 门控标定（可选）</h2>
+    <div class="ctrl">
+      <select id="calibSel"><option value="">（不加载标定 → legacy 单段 FFT + SNR 门）</option></select>
+      <button class="btn ghost" id="calibReload">刷新列表</button>
+    </div>
+    <div class="ctrl">
+      <input type="file" id="calibFile" accept=".json">
+      <button class="btn ghost" id="calibUpload">上传</button>
+    </div>
+    <div class="card" id="calibInfo">标定：未加载</div>
+    <div class="msg" id="calibMsg"></div>
+    <div class="card">
+      <h3>口径说明</h3>
+      <div class="kv">
+        · <b>legacy</b>：单段 FFT + SNR≥阈值，无本底/稳定性门<br>
+        · <b>calibrated</b>：G0 幅度 / G1 显著性 / G2 稳定性 / G3 频率下限 + 丢帧率门 + ID 连续性门<br>
+        · 判定在 px 域、输出幅值在 mm 域；只有 READY 的标定可作正式判定<br>
+        · 标定必须与被分析视频<b>同帧率、同相机、同光照条件</b>，否则阈值失效
+      </div>
+    </div>
+  </section>
+
+  <section class="col">
+    <h2>2 · 上传数据并提取主频</h2>
+    <div class="tabs">
+      <button id="tabVideo" class="on">激励视频</button>
+      <button id="tabJsonl">位移 JSONL</button>
+    </div>
+
+    <div id="paneVideo">
+      <div class="ctrl"><input type="file" id="videoFile" accept=".mp4,.avi,.mov,.mkv,.webm,.m4v"></div>
+      <div class="ctrl">
+        <input type="text" id="videoPath" placeholder="或直接填本机视频路径（绝对路径 / 相对项目根），大视频推荐此方式"
+               style="flex:1;min-width:200px;padding:5px 7px;border:1px solid var(--line);border-radius:6px;font-size:12px">
+        <button class="btn ghost" id="pathRun">用本机路径</button>
+      </div>
+      <div class="grid">
+        <label>置信度 conf <input type="number" id="pConf" step="0.05" value="0.4"></label>
+        <label>NMS IoU <input type="number" id="pIou" step="0.05" value="0.6"></label>
+        <label>设备 <input type="text" id="pDevice" value="cpu" style="width:88px"></label>
+        <label>分析轴 <select id="pAxis" style="min-width:88px"><option value="dy">dy 垂向</option><option value="dx">dx 横向</option></select></label>
+        <label>窗长 s <input type="number" id="pWindow" step="5" value="30"></label>
+        <label>SNR 门 <input type="number" id="pSnr" step="1" value="5"></label>
+        <label>抽帧步长 <input type="number" id="pStride" step="1" min="1" value="1"></label>
+        <label>最多帧数 <input type="number" id="pMaxFrames" step="100" min="0" value="0"></label>
+      </div>
+      <div class="ctrl">
+        <button class="btn" id="videoRun">开始提取</button>
+        <button class="btn ghost" id="videoStop">重置</button>
+      </div>
+    </div>
+
+    <div id="paneJsonl" class="hide">
+      <div class="ctrl"><input type="file" id="jsonlFile" accept=".jsonl,.json,.txt"></div>
+      <div class="grid">
+        <label>分析轴 <select id="jAxis" style="min-width:88px"><option value="dy">dy 垂向</option><option value="dx">dx 横向</option></select></label>
+        <label>窗长 s <input type="number" id="jWindow" step="5" value="30"></label>
+        <label>SNR 门 <input type="number" id="jSnr" step="1" value="5"></label>
+        <label>抽帧步长 <input type="number" id="jStride" step="1" min="1" value="1" disabled></label>
+      </div>
+      <div class="ctrl">
+        <button class="btn" id="jsonlRun">开始分析</button>
+      </div>
+    </div>
+
+    <div class="bar"><i id="progBar"></i></div>
+    <div class="msg" id="runMsg">等待上传数据…</div>
+  </section>
+</div>
+
+<section class="result" id="result">
+  <div class="kpis" id="kpis"></div>
+  <div class="warn hide" id="warnBox"></div>
+  <div class="sect">
+    <h3>功率谱（最后一个分析窗）</h3>
+    <canvas id="specCv"></canvas>
+  </div>
+  <div class="sect">
+    <h3>逐窗主频与门控</h3>
+    <div class="wrap"><table id="winTable"></table></div>
+  </div>
+  <div class="sect" id="dlSect"><a id="dlLink" href="#">下载 displacement.jsonl</a></div>
+</section>
+
+<script>
+"use strict";
+const $ = id => document.getElementById(id);
+let DEFAULTS = null, CUR = null, POLL = null;
+
+async function get(path){
+  const r = await fetch(path); const j = await r.json();
+  if(!r.ok) throw new Error(j.error || ("HTTP "+r.status)); return j;
+}
+async function postJson(path, body){
+  const r = await fetch(path,{method:"POST",headers:{"Content-Type":"application/json"},
+                              body:JSON.stringify(body)});
+  const j = await r.json();
+  if(!r.ok) throw new Error(j.error || ("HTTP "+r.status)); return j;
+}
+function msg(id, t, kind){ const e=$(id); e.textContent=t; e.className="msg"+(kind?" "+kind:""); }
+function fmt(v,n=3){ return (v===null||v===undefined||v!=v)?"—":Number(v).toFixed(n); }
+function tag(ok,txt,cls){ return `<span class="tag ${cls||(ok?"pass":"fail")}">${txt||(ok?"PASS":"FAIL")}</span>`; }
+
+async function loadDefaults(){
+  try{
+    const d = await get("/api/defaults"); DEFAULTS=d;
+    const sel=$("calibSel"); sel.innerHTML='<option value="">（不加载标定 → legacy 单段 FFT + SNR 门）</option>';
+    (d.calibs||[]).forEach(c=>{
+      const o=document.createElement("option"); o.value=c.path;
+      o.textContent=`${c.name} | ${c.verdict||"未知"} | ${c.cam_id||"—"} | ${c.source}`;
+      sel.appendChild(o);
+    });
+    const p=d.defaults||{};
+    $("pConf").value=p.conf; $("pIou").value=p.iou; $("pDevice").value=p.device||"cpu";
+    $("pWindow").value=p.window_s; $("pSnr").value=p.snr;
+    $("jWindow").value=p.window_s; $("jSnr").value=p.snr;
+    msg("calibMsg",`配置：${d.config_path} · 靶标真实直径 ${d.real_diameter_mm}mm`);
+  }catch(e){ msg("calibMsg",e.message,"err"); }
+}
+
+$("calibReload").onclick=loadDefaults;
+
+$("calibSel").onchange=async e=>{
+  const path=e.target.value;
+  if(!path){ $("calibInfo").innerHTML="标定：未加载（legacy 口径）"; return; }
+  try{
+    const r=await postJson("/api/calib/validate",{path});
+    if(!r.loaded){ $("calibInfo").innerHTML="标定加载失败："+r.error; return; }
+    const p=r.params||{}, f=r.fingerprint||{};
+    const w=(r.warnings||[]).map(x=>`<div style="color:#b7791f">${x}</div>`).join("");
+    $("calibInfo").innerHTML=`<b>${r.verdict||"未知"}</b> · 相机 ${r.cam_id||"—"} · `+
+      `采样 ${fmt(f.rate_hz,2)}Hz<br>本底 ${fmt(p.noise_floor_mg,4)}${p.unit||""} · `+
+      `G0×${fmt(p.g0_rms_factor,2)} · G1≥${fmt(p.g1_peak_ratio,1)} · `+
+      `G2≤${fmt(p.g2_cv_max,3)} · f1_min=${fmt(p.f1_min_hz,2)}Hz`+w;
+  }catch(err){ msg("calibMsg",err.message,"err"); }
+};
+
+$("calibUpload").onclick=async()=>{
+  const f=$("calibFile").files[0];
+  if(!f){ msg("calibMsg","请先选择标定 JSON","err"); return; }
+  try{
+    const r=await fetch("/api/calib/upload?name="+encodeURIComponent(f.name),
+      {method:"POST",headers:{"Content-Type":"application/octet-stream"},body:await f.arrayBuffer()});
+    const j=await r.json(); if(!r.ok) throw new Error(j.error||"上传失败");
+    msg("calibMsg",`已上传 ${j.name} · ${j.verdict||"未知"}${j.warning?" · "+j.warning:""}`,
+        j.loaded?"ok":"err");
+    await loadDefaults();
+    $("calibSel").value=j.path; $("calibSel").dispatchEvent(new Event("change"));
+  }catch(e){ msg("calibMsg",e.message,"err"); }
+};
+
+// ---- 入口切换 ----
+function switchTab(which){
+  const v=which==="video";
+  $("tabVideo").classList.toggle("on",v); $("tabJsonl").classList.toggle("on",!v);
+  $("paneVideo").classList.toggle("hide",!v); $("paneJsonl").classList.toggle("hide",v);
+}
+$("tabVideo").onclick=()=>switchTab("video");
+$("tabJsonl").onclick=()=>switchTab("jsonl");
+
+function commonParams(prefix){
+  return {axis:$(prefix+"Axis").value, window_s:+$(prefix+"Window").value,
+          snr:+$(prefix+"Snr").value, calib:$("calibSel").value};
+}
+function setProgress(done,total,text){
+  const pct=total>0?Math.min(100,done/total*100):0;
+  $("progBar").style.width=pct+"%";
+  if(text) msg("runMsg",text);
+}
+
+function startPolling(id){
+  if(POLL){ clearInterval(POLL); POLL=null; }
+  msg("runMsg",`任务 ${id} 已提交，开始测量…`);
+  POLL=setInterval(async()=>{
+    try{
+      const s=await get("/api/job?id="+id);
+      setProgress(s.done||0,s.total||1,
+        `${s.stage||""} ${s.message||""} · ${s.done||0}/${s.total||1}`);
+      if(s.status==="done"){
+        clearInterval(POLL); POLL=null; $("videoRun").disabled=false;
+        render(s,s.result,s.spectrum,"/api/download?id="+id);
+      }else if(s.status==="error"){
+        clearInterval(POLL); POLL=null; $("videoRun").disabled=false;
+        msg("runMsg",s.message||"任务失败","err");
+      }
+    }catch(e){ clearInterval(POLL); POLL=null; $("videoRun").disabled=false;
+               msg("runMsg",e.message,"err"); }
+  },600);
+}
+
+$("videoRun").onclick=async()=>{
+  const f=$("videoFile").files[0];
+  if(!f){ msg("runMsg","请先选择激励视频","err"); return; }
+  $("result").style.display="none";
+  const q=new URLSearchParams({
+    name:f.name, conf:$("pConf").value, iou:$("pIou").value,
+    device:$("pDevice").value, axis:$("pAxis").value,
+    window_s:$("pWindow").value, snr:$("pSnr").value,
+    frame_stride:$("pStride").value, max_frames:$("pMaxFrames").value,
+    calib:$("calibSel").value});
+  try{
+    setProgress(0,1,"上传视频中…"); $("videoRun").disabled=true;
+    const r=await fetch("/api/video/start?"+q.toString(),
+      {method:"POST",headers:{"Content-Type":"application/octet-stream"},body:await f.arrayBuffer()});
+    const j=await r.json(); if(!r.ok) throw new Error(j.error||"上传失败");
+    $("videoRun").disabled=false;
+    startPolling(j.id);
+  }catch(e){ $("videoRun").disabled=false; msg("runMsg",e.message,"err"); }
+};
+
+$("pathRun").onclick=async()=>{
+  const path=$("videoPath").value.trim();
+  if(!path){ msg("runMsg","请先填写本机视频路径","err"); return; }
+  $("result").style.display="none";
+  try{
+    setProgress(0,1,"读取本机视频…"); $("videoRun").disabled=true;
+    const j=await postJson("/api/video/start_path",{
+      path, conf:+$("pConf").value, iou:+$("pIou").value,
+      device:$("pDevice").value, axis:$("pAxis").value,
+      window_s:+$("pWindow").value, snr:+$("pSnr").value,
+      frame_stride:+$("pStride").value, max_frames:+$("pMaxFrames").value,
+      calib:$("calibSel").value});
+    $("videoRun").disabled=false;
+    msg("runMsg",`读取 ${j.path}（${j.size_mb}MB）`);
+    startPolling(j.id);
+  }catch(e){ $("videoRun").disabled=false; msg("runMsg",e.message,"err"); }
+};
+
+$("videoStop").onclick=()=>{
+  if(POLL){ clearInterval(POLL); POLL=null; }
+  $("videoRun").disabled=false; $("progBar").style.width="0";
+  $("result").style.display="none"; msg("runMsg","已重置");
+};
+
+$("jsonlRun").onclick=async()=>{
+  const f=$("jsonlFile").files[0];
+  if(!f){ msg("runMsg","请先选择 displacement.jsonl","err"); return; }
+  try{
+    msg("runMsg","读取位移数据…");
+    const content=await f.text();
+    const p=commonParams("j");
+    msg("runMsg","提取主频中…");
+    const j=await postJson("/api/analyze_jsonl",{content,...p});
+    render({measurement:j.measurement,warnings:j.warnings},j.result,j.spectrum,null);
+  }catch(e){ msg("runMsg",e.message,"err"); }
+};
+
+// ---- 结果渲染 ----
+function render(meta,res,spec,dl){
+  if(!res||!res.targets||!Object.keys(res.targets).length){
+    msg("runMsg","没有可用的分析结果","err"); return;
+  }
+  CUR={res,spec}; $("result").style.display="block";
+  const pids=Object.keys(res.targets);
+  const totals=pids.reduce((a,p)=>a+res.targets[p].n_valid_windows,0);
+  const allF=pids.flatMap(p=>res.targets[p].f1_list_hz||[]);
+  const mean=allF.length?allF.reduce((a,b)=>a+b,0)/allF.length:null;
+  $("kpis").innerHTML=`
+    <div class="kpi"><div class="k">分析轴 / 模式</div><div class="v">${res.axis.toUpperCase()}</div><div class="s">${res.mode}</div></div>
+    <div class="kpi"><div class="k">目标数</div><div class="v">${pids.length}</div><div class="s">${meta.measurement?.video||""}</div></div>
+    <div class="kpi"><div class="k">有效窗</div><div class="v">${totals}</div><div class="s">共 ${pids.reduce((a,p)=>a+res.targets[p].n_windows,0)} 窗</div></div>
+    <div class="kpi"><div class="k">主频均值</div><div class="v">${fmt(mean,3)}</div><div class="s">Hz（所有有效窗）</div></div>
+    <div class="kpi"><div class="k">Nyquist</div><div class="v">${fmt(res.nyquist_hz,2)}</div><div class="s">Hz · 窗长 ${res.window_s}s</div></div>`;
+  const warns=(meta.warnings||[]).slice();
+  pids.forEach(p=>{ if(res.targets[p].n_valid_windows===0)
+    warns.push(`${p}：没有任何窗通过门控，检查激励幅度/帧率/标定是否匹配`); });
+  const wb=$("warnBox");
+  if(warns.length){ wb.innerHTML=warns.map(x=>"· "+x).join("<br>"); wb.classList.remove("hide"); }
+  else wb.classList.add("hide");
+  drawSpec(pids[0]);
+  const rows=[];
+  pids.forEach(pid=>{
+    res.targets[pid].windows.forEach(w=>{
+      const g=w.gates||{};
+      let gt="";
+      if(g.mode==="calibrated"){
+        gt=["G0","G1","G2","G3"].map(k=>{
+          const v=g[k]; if(!v) return "";
+          return tag(v.pass,k,k.pass?"pass":"fail");
+        }).join("");
+        ["drop","id"].forEach(k=>{ if(g[k]) gt+=tag(g[k].status!=="FAIL",k,
+          g[k].status==="FAIL"?"fail":(g[k].status==="SKIP"?"skip":"pass")); });
+      }
+      rows.push(`<tr><td>${pid}</td><td>${w.seg}</td><td>${fmt(w.t0,1)}~${fmt(w.t1,1)}</td>`+
+        `<td>${w.n}</td><td><b>${fmt(w.f1_hz,3)}</b></td><td>${fmt(w.snr,1)}</td>`+
+        `<td>${w.valid?tag(true,"VALID","valid"):tag(false,"INVALID","invalid")}</td>`+
+        `<td>${gt}</td><td style="text-align:left">${w.reason||""}</td></tr>`);
+    });
+  });
+  $("winTable").innerHTML=`<thead><tr><th>目标</th><th>窗</th><th>时间 s</th><th>样本</th>`+
+    `<th>f1 Hz</th><th>SNR</th><th>判定</th><th>门控</th><th>说明</th></tr></thead>`+
+    `<tbody>${rows.join("")}</tbody>`;
+  if(dl){ $("dlSect").style.display="block"; $("dlLink").href=dl; }
+  else $("dlSect").style.display="none";
+  msg("runMsg","分析完成","ok");
+}
+
+function drawSpec(pid){
+  const cv=$("specCv"), dpr=window.devicePixelRatio||1;
+  const w=cv.clientWidth||600,h=cv.clientHeight||180;
+  cv.width=Math.round(w*dpr); cv.height=Math.round(h*dpr);
+  const c=cv.getContext("2d"); c.setTransform(dpr,0,0,dpr,0,0); c.clearRect(0,0,w,h);
+  const s=(CUR.spec||{})[pid];
+  const pad={l:52,r:12,t:12,b:24}, X0=pad.l,X1=w-pad.r,Y0=pad.t,Y1=h-pad.b;
+  c.strokeStyle="#eef1f6"; c.fillStyle="#8b95a5"; c.font="10px sans-serif";
+  if(!s){ c.fillText("无谱数据",X0,Y0+20); return; }
+  const f=s.freq||[], p=s.power||[];
+  if(f.length<3){ c.fillText("谱长度不足",X0,Y0+20); return; }
+  const pmax=Math.max(...p.map(v=>Math.log10(Math.max(v,1e-12)))),
+        pmin=Math.min(...p.map(v=>Math.log10(Math.max(v,1e-12))));
+  const xmax=f[f.length-1];
+  for(let i=0;i<=4;i++){
+    const y=Y0+(Y1-Y0)*i/4; c.beginPath(); c.moveTo(X0,y); c.lineTo(X1,y); c.stroke();
+    c.textAlign="right"; c.fillText((pmax-(pmax-pmin)*i/4).toFixed(1),X0-5,y+3);
+  }
+  for(let i=0;i<=5;i++){
+    const x=X0+(X1-X0)*i/5; c.beginPath(); c.moveTo(x,Y0); c.lineTo(x,Y1); c.stroke();
+    c.textAlign="center"; c.fillText((xmax*i/5).toFixed(1),x,Y1+14);
+  }
+  c.strokeStyle="#cdd4df"; c.beginPath(); c.moveTo(X0,Y0); c.lineTo(X0,Y1); c.lineTo(X1,Y1); c.stroke();
+  c.strokeStyle="#2f6feb"; c.lineWidth=1.5; c.beginPath();
+  f.forEach((fv,i)=>{
+    const x=X0+(X1-X0)*fv/xmax;
+    const lg=Math.log10(Math.max(p[i],1e-12));
+    const y=Y1-(Y1-Y0)*(lg-pmin)/Math.max(1e-9,pmax-pmin);
+    i?c.lineTo(x,y):c.moveTo(x,y);
+  });
+  c.stroke();
+  if(s.f1_hz){
+    const x=X0+(X1-X0)*s.f1_hz/xmax;
+    c.strokeStyle="#d04a4a"; c.setLineDash([4,3]); c.beginPath();
+    c.moveTo(x,Y0); c.lineTo(x,Y1); c.stroke(); c.setLineDash([]);
+    c.fillStyle="#d04a4a"; c.textAlign="left"; c.fillText("f1="+s.f1_hz.toFixed(3)+"Hz",x+4,Y0+10);
+  }
+  c.fillStyle="#8b95a5"; c.textAlign="right"; c.fillText("Hz",X1,Y1+20);
+}
+
+loadDefaults();
+</script>
+</body>
+</html>

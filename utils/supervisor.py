@@ -166,8 +166,11 @@ def _export_annotated_videos(cfg):
             continue  # 实时流无本地文件，无法离线回贴
         src = Path(url)
         src_abs = src if src.is_absolute() else Path(config_dir) / src
-        c = {"id": cam["id"], "task": cam["task"], "url": str(src_abs),
-             "calibration": cam.get("calibration")}
+        # 整份相机配置透传，只覆盖 url 为绝对路径。绝不能白名单挑字段：
+        # 漏掉 undistort 会让 camera_undistort() 回退到 pole mode 默认值，
+        # 配置里写 false 也会静默变成整帧去畸变（烧录时间戳一起被扭斜）。
+        c = dict(cam)
+        c["url"] = str(src_abs)
         out_dir = Path(output_dir) / cam["task"] / cam["id"]
         try:
             st = export_cam_video(c, output_dir, pole_mode, out_dir)
@@ -215,8 +218,9 @@ def _poll_done_exports(cfg, exported):
         # Recorder 已确认该路结果全部落盘 → 直接导出该路标注视频
         src = Path(url)
         src_abs = src if src.is_absolute() else Path(config_dir) / src
-        c = {"id": cid, "task": branch, "url": str(src_abs),
-             "calibration": cam.get("calibration")}
+        # 同上：整份透传，避免白名单复制丢掉 undistort 等相机级开关
+        c = dict(cam)
+        c["url"] = str(src_abs)
         out_dir = Path(output_dir) / branch / cid
         try:
             from viz.export import export_cam_video
@@ -253,8 +257,8 @@ def _poll_done_exports(cfg, exported):
             log("supervisor", f"[即时标注视频] {cid} 跳过: {res.get('reason')}")
 
 
-def _spawn(name, target, args):
-    p = mp.Process(target=target, args=args, name=name)
+def _spawn(name, target, args, kwargs=None):
+    p = mp.Process(target=target, args=args, kwargs=kwargs or {}, name=name)
     p.start()
     time.sleep(0.3)  # 错峰启动，错开模型加载
     return p
@@ -347,17 +351,34 @@ def run(config_path: str, refresh_init: bool = False) -> int:
             "marker_inference", run_marker_inference,
             (cfg, marker_cams, marker_queues, result_q, spectrum_q,
              stop_event, refresh_init, marker_ready))
+        from marker_subpixel_tracker.gate_core import load_gate_config
+        _fft_cfg = cfg["marker"]["fft"]
+        gate_cfg = load_gate_config(_fft_cfg.get("calib", ""))
+        if gate_cfg:
+            log("supervisor", f"靶标门控标定已加载: {gate_cfg['path']} "
+                              f"(verdict={gate_cfg.get('verdict')})")
+        else:
+            log("supervisor", "靶标门控未启用（marker.fft.calib 为空或不可读），走 legacy SNR 门")
+        # 关键字传参：修复历史上 defl/cable 阈值与占位值位置互换的 bug。
+        # gate_cfg 为纯 dict，multiprocessing spawn 可 pickle。
         procs["spectrum"] = _spawn(
             "spectrum", run_spectrum_analyzer,
-            (float(cfg["marker"]["fft"]["window_s"]),
-             float(cfg["marker"]["fft"]["snr"]),
-             int(cfg["marker"]["fft"]["min_samples"]),
-             spectrum_q, result_q, stop_event,
-             float(cfg["marker"]["fft"].get("min_span_s", 0.0)),
-             _amp_threshold(cfg), _ph_deflection(cfg), _ph_cable_force(cfg),
-             _defl_threshold(cfg), _cable_threshold(cfg),
-             realtime_marker, clip_q, str(runtime["output_dir"]),
-             file_marker_sources))
+            (float(_fft_cfg["window_s"]), float(_fft_cfg["snr"]),
+             int(_fft_cfg["min_samples"]),
+             spectrum_q, result_q, stop_event),
+            kwargs={
+                "min_span_s": float(_fft_cfg.get("min_span_s", 0.0)),
+                "amp_threshold": _amp_threshold(cfg),
+                "deflection_threshold": _defl_threshold(cfg),
+                "cable_force_threshold": _cable_threshold(cfg),
+                "placeholder_deflection": _ph_deflection(cfg),
+                "placeholder_cable_force": _ph_cable_force(cfg),
+                "realtime_cam_ids": realtime_marker,
+                "clip_q": clip_q,
+                "output_dir": str(runtime["output_dir"]),
+                "file_sources": file_marker_sources,
+                "gate_config": gate_cfg,
+            })
 
     log("supervisor", f"已启动 {len(procs)} 个进程: "
                       f"{list(procs.keys())}")

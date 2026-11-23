@@ -99,6 +99,10 @@ def export_cam_video(cam: dict, output_dir, pole_mode: str, out_dir,
     # 否则 box/top/bottom（原始像素坐标）会与画面错位。
     undistort = (camera_undistort(cam, pole_mode, "export")
                  if branch == "pole" else False)
+    # 显式打出来：配置开关若在中途被字段过滤丢掉，日志里能立刻看出
+    # （cam.undistort=None 而最终 True = 有人没把开关透传过来）
+    log("export", f"{cam['id']} 标注视频去畸变={undistort} "
+                  f"(cam.undistort={cam.get('undistort')!r}, pole_mode={pole_mode})")
     pids = {r.get("pid") for recs in frame_map.values()
             for r in recs if r.get("pid") is not None}
     baseline_poles = len(pids)
