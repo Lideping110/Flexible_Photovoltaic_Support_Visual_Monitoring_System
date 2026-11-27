@@ -63,6 +63,10 @@ from utils.inference import DetInference
 TAG = "marker-det"
 BOX_COLOR = (0, 255, 255)   # 黄色，与 viz/render.py::_draw_marker 一致
 FONT = cv2.FONT_HERSHEY_SIMPLEX
+# RTSP 偶发 RTP 错乱会让解码器进入错误态，read 持续失败；重建连接可恢复。
+# 与 D:\摄像头拉流\rtsp_capture.py 的重连口径一致（最多 5 次、间隔 3s）。
+MAX_STREAM_RECONNECT = 5
+STREAM_RECONNECT_DELAY = 3.0
 
 
 def _resolve_source(value: str, config_dir: Path):
@@ -446,12 +450,34 @@ def main() -> int:
 
         try:
             pending = []
+            reconnects = 0
             while True:
                 if args.max_frames and frames_inferred + len(pending) >= args.max_frames:
                     break
                 ok, frame = cap.read()
                 if not ok or frame is None:
-                    break
+                    # RTSP 偶发 RTP 包错乱会让解码器进入错误态，此后 read 持续
+                    # 返回 False（重试 read 无效）。文件源 EOF 直接结束；实时
+                    # 流重建 VideoCapture 恢复解码器，与 rtsp_capture.py 同口径。
+                    if not is_stream:
+                        break
+                    reconnects += 1
+                    if reconnects > MAX_STREAM_RECONNECT:
+                        log(TAG, f"{prefix} 读帧失败，已重连 {MAX_STREAM_RECONNECT} 次仍无效，"
+                                 "结束本次检测")
+                        break
+                    log(TAG, f"{prefix} 读帧失败（第 {reconnects} 次），"
+                             f"{STREAM_RECONNECT_DELAY}s 后重连 RTSP…")
+                    time.sleep(STREAM_RECONNECT_DELAY)
+                    cap.release()
+                    cap = open_camera(str(source), low_latency=True)
+                    if cap is None or not cap.isOpened():
+                        log(TAG, f"{prefix} 重连失败，结束本次检测")
+                        break
+                    continue
+                if reconnects:
+                    log(TAG, f"{prefix} 重连成功，继续读帧")
+                    reconnects = 0
                 if frames_read % args.stride == 0:
                     pending.append((frames_read, frame))
                 frames_read += 1

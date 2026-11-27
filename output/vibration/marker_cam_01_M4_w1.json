@@ -1,0 +1,23 @@
+{
+  "window": 1,
+  "t0": 30.0,
+  "t1": 60.0,
+  "frequency_hz": 2.104380533888943,
+  "frequency_axis": "dy",
+  "amplitude_mm": 7.73442966275343,
+  "amplitude_threshold_mm": 5.0,
+  "deflection_mm": 0.0,
+  "deflection_placeholder": true,
+  "deflection_threshold_mm": 0.0,
+  "cable_force_idx": 100.0,
+  "cable_force_placeholder": true,
+  "cable_force_threshold_idx": 0.0,
+  "source": "file",
+  "clip": "/media/output/vibration/30.0_60.0_original_h264.mp4",
+  "clip_native": "/media/output/vibration/30.0_60.0_original.mp4",
+  "clip_status": "ok",
+  "triggered": [
+    "amplitude"
+  ],
+  "cam_id": "marker_cam_01"
+}

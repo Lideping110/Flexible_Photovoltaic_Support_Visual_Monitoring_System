@@ -1,0 +1,604 @@
+{
+  "jsonl": "displacement_B.jsonl",
+  "calib": "calib_A_133301.json",
+  "axis": "dy",
+  "fs_cal": 20.0,
+  "targets": {
+    "M1": {
+      "fs_hz": 20.0,
+      "mm_per_px": 2.962085,
+      "mm_per_px_dev_pct": 8.297,
+      "floor_mm": 0.17281693116284608,
+      "floor_px": 0.058343001869621165,
+      "n_windows": 10,
+      "cal_valid": 0,
+      "legacy_valid": 10,
+      "windows": [
+        {
+          "seg": 0,
+          "t0": 0.0,
+          "cal_valid": false,
+          "legacy_valid": true,
+          "f1_cal": null,
+          "f1_legacy": 0.03333333333333286,
+          "failed": [
+            "G2",
+            "G3"
+          ],
+          "reason": "未通过：G2/G3"
+        },
+        {
+          "seg": 1,
+          "t0": 30.0,
+          "cal_valid": false,
+          "legacy_valid": true,
+          "f1_cal": null,
+          "f1_legacy": 0.03333333333333286,
+          "failed": [
+            "G0",
+            "G2",
+            "G3"
+          ],
+          "reason": "未通过：G0/G2/G3"
+        },
+        {
+          "seg": 2,
+          "t0": 60.0,
+          "cal_valid": false,
+          "legacy_valid": true,
+          "f1_cal": null,
+          "f1_legacy": 0.1333333333333409,
+          "failed": [
+            "G0",
+            "G2",
+            "G3"
+          ],
+          "reason": "未通过：G0/G2/G3"
+        },
+        {
+          "seg": 3,
+          "t0": 90.0,
+          "cal_valid": false,
+          "legacy_valid": true,
+          "f1_cal": null,
+          "f1_legacy": 0.2333333333333466,
+          "failed": [
+            "G2",
+            "G3"
+          ],
+          "reason": "未通过：G2/G3"
+        },
+        {
+          "seg": 4,
+          "t0": 120.0,
+          "cal_valid": false,
+          "legacy_valid": true,
+          "f1_cal": null,
+          "f1_legacy": 0.033333333333325756,
+          "failed": [
+            "G2",
+            "G3"
+          ],
+          "reason": "未通过：G2/G3"
+        },
+        {
+          "seg": 5,
+          "t0": 150.0,
+          "cal_valid": false,
+          "legacy_valid": true,
+          "f1_cal": null,
+          "f1_legacy": 0.4999999999998863,
+          "failed": [
+            "G2",
+            "G3"
+          ],
+          "reason": "未通过：G2/G3"
+        },
+        {
+          "seg": 6,
+          "t0": 180.0,
+          "cal_valid": false,
+          "legacy_valid": true,
+          "f1_cal": null,
+          "f1_legacy": 0.2999999999999318,
+          "failed": [
+            "G2",
+            "G3"
+          ],
+          "reason": "未通过：G2/G3"
+        },
+        {
+          "seg": 7,
+          "t0": 210.0,
+          "cal_valid": false,
+          "legacy_valid": true,
+          "f1_cal": null,
+          "f1_legacy": 0.16666666666662877,
+          "failed": [
+            "G3"
+          ],
+          "reason": "未通过：G3"
+        },
+        {
+          "seg": 8,
+          "t0": 240.0,
+          "cal_valid": false,
+          "legacy_valid": true,
+          "f1_cal": null,
+          "f1_legacy": 0.033333333333325756,
+          "failed": [
+            "G0",
+            "G2",
+            "G3"
+          ],
+          "reason": "未通过：G0/G2/G3"
+        },
+        {
+          "seg": 9,
+          "t0": 270.0,
+          "cal_valid": false,
+          "legacy_valid": true,
+          "f1_cal": null,
+          "f1_legacy": 0.033333333333325756,
+          "failed": [
+            "G0",
+            "G2",
+            "G3"
+          ],
+          "reason": "未通过：G0/G2/G3"
+        }
+      ]
+    },
+    "M2": {
+      "fs_hz": 20.0,
+      "mm_per_px": 2.741228,
+      "mm_per_px_dev_pct": 0.222,
+      "floor_mm": 0.1331639555462736,
+      "floor_px": 0.048578209721696276,
+      "n_windows": 10,
+      "cal_valid": 0,
+      "legacy_valid": 10,
+      "windows": [
+        {
+          "seg": 0,
+          "t0": 0.0,
+          "cal_valid": false,
+          "legacy_valid": true,
+          "f1_cal": null,
+          "f1_legacy": 0.03333333333333286,
+          "failed": [
+            "G0",
+            "G2",
+            "G3"
+          ],
+          "reason": "未通过：G0/G2/G3"
+        },
+        {
+          "seg": 1,
+          "t0": 30.0,
+          "cal_valid": false,
+          "legacy_valid": true,
+          "f1_cal": null,
+          "f1_legacy": 0.03333333333333286,
+          "failed": [
+            "G0",
+            "G2",
+            "G3"
+          ],
+          "reason": "未通过：G0/G2/G3"
+        },
+        {
+          "seg": 2,
+          "t0": 60.0,
+          "cal_valid": false,
+          "legacy_valid": true,
+          "f1_cal": null,
+          "f1_legacy": 0.03333333333333523,
+          "failed": [
+            "G0",
+            "G3"
+          ],
+          "reason": "未通过：G0/G3"
+        },
+        {
+          "seg": 3,
+          "t0": 90.0,
+          "cal_valid": false,
+          "legacy_valid": true,
+          "f1_cal": null,
+          "f1_legacy": 0.5333333333333636,
+          "failed": [
+            "G3"
+          ],
+          "reason": "未通过：G3"
+        },
+        {
+          "seg": 4,
+          "t0": 120.0,
+          "cal_valid": false,
+          "legacy_valid": true,
+          "f1_cal": null,
+          "f1_legacy": 0.5666666666665379,
+          "failed": [
+            "G3"
+          ],
+          "reason": "未通过：G3"
+        },
+        {
+          "seg": 5,
+          "t0": 150.0,
+          "cal_valid": false,
+          "legacy_valid": true,
+          "f1_cal": null,
+          "f1_legacy": 0.5999999999998636,
+          "failed": [
+            "G2",
+            "G3"
+          ],
+          "reason": "未通过：G2/G3"
+        },
+        {
+          "seg": 6,
+          "t0": 180.0,
+          "cal_valid": false,
+          "legacy_valid": true,
+          "f1_cal": null,
+          "f1_legacy": 0.5666666666665379,
+          "failed": [
+            "G3"
+          ],
+          "reason": "未通过：G3"
+        },
+        {
+          "seg": 7,
+          "t0": 210.0,
+          "cal_valid": false,
+          "legacy_valid": true,
+          "f1_cal": null,
+          "f1_legacy": 0.5666666666665379,
+          "failed": [
+            "G3"
+          ],
+          "reason": "未通过：G3"
+        },
+        {
+          "seg": 8,
+          "t0": 240.0,
+          "cal_valid": false,
+          "legacy_valid": true,
+          "f1_cal": null,
+          "f1_legacy": 0.09999999999997727,
+          "failed": [
+            "G0",
+            "G3"
+          ],
+          "reason": "未通过：G0/G3"
+        },
+        {
+          "seg": 9,
+          "t0": 270.0,
+          "cal_valid": false,
+          "legacy_valid": true,
+          "f1_cal": null,
+          "f1_legacy": 0.06666666666665151,
+          "failed": [
+            "G0",
+            "G2",
+            "G3"
+          ],
+          "reason": "未通过：G0/G2/G3"
+        }
+      ]
+    },
+    "M3": {
+      "fs_hz": 20.0,
+      "mm_per_px": 2.783964,
+      "mm_per_px_dev_pct": 1.785,
+      "floor_mm": 0.11730603120705993,
+      "floor_px": 0.04213632968259056,
+      "n_windows": 10,
+      "cal_valid": 0,
+      "legacy_valid": 10,
+      "windows": [
+        {
+          "seg": 0,
+          "t0": 0.0,
+          "cal_valid": false,
+          "legacy_valid": true,
+          "f1_cal": null,
+          "f1_legacy": 0.3333333333333286,
+          "failed": [
+            "G0",
+            "G2",
+            "G3"
+          ],
+          "reason": "未通过：G0/G2/G3"
+        },
+        {
+          "seg": 1,
+          "t0": 30.0,
+          "cal_valid": false,
+          "legacy_valid": true,
+          "f1_cal": null,
+          "f1_legacy": 0.03333333333333286,
+          "failed": [
+            "G0",
+            "G2",
+            "G3"
+          ],
+          "reason": "未通过：G0/G2/G3"
+        },
+        {
+          "seg": 2,
+          "t0": 60.0,
+          "cal_valid": false,
+          "legacy_valid": true,
+          "f1_cal": null,
+          "f1_legacy": 0.10000000000000568,
+          "failed": [
+            "G0",
+            "G2",
+            "G3"
+          ],
+          "reason": "未通过：G0/G2/G3"
+        },
+        {
+          "seg": 3,
+          "t0": 90.0,
+          "cal_valid": false,
+          "legacy_valid": true,
+          "f1_cal": null,
+          "f1_legacy": 0.10000000000000568,
+          "failed": [
+            "G0",
+            "G3"
+          ],
+          "reason": "未通过：G0/G3"
+        },
+        {
+          "seg": 4,
+          "t0": 120.0,
+          "cal_valid": false,
+          "legacy_valid": true,
+          "f1_cal": null,
+          "f1_legacy": 0.06666666666665151,
+          "failed": [
+            "G0",
+            "G2",
+            "G3"
+          ],
+          "reason": "未通过：G0/G2/G3"
+        },
+        {
+          "seg": 5,
+          "t0": 150.0,
+          "cal_valid": false,
+          "legacy_valid": true,
+          "f1_cal": null,
+          "f1_legacy": 0.19999999999995455,
+          "failed": [
+            "G2",
+            "G3"
+          ],
+          "reason": "未通过：G2/G3"
+        },
+        {
+          "seg": 6,
+          "t0": 180.0,
+          "cal_valid": false,
+          "legacy_valid": true,
+          "f1_cal": null,
+          "f1_legacy": 0.06666666666665151,
+          "failed": [
+            "G2",
+            "G3"
+          ],
+          "reason": "未通过：G2/G3"
+        },
+        {
+          "seg": 7,
+          "t0": 210.0,
+          "cal_valid": false,
+          "legacy_valid": true,
+          "f1_cal": null,
+          "f1_legacy": 0.06666666666665151,
+          "failed": [
+            "G2",
+            "G3"
+          ],
+          "reason": "未通过：G2/G3"
+        },
+        {
+          "seg": 8,
+          "t0": 240.0,
+          "cal_valid": false,
+          "legacy_valid": true,
+          "f1_cal": null,
+          "f1_legacy": 0.033333333333325756,
+          "failed": [
+            "G0",
+            "G2",
+            "G3"
+          ],
+          "reason": "未通过：G0/G2/G3"
+        },
+        {
+          "seg": 9,
+          "t0": 270.0,
+          "cal_valid": false,
+          "legacy_valid": true,
+          "f1_cal": null,
+          "f1_legacy": 0.033333333333325756,
+          "failed": [
+            "G0",
+            "G2",
+            "G3"
+          ],
+          "reason": "未通过：G0/G2/G3"
+        }
+      ]
+    },
+    "M4": {
+      "fs_hz": 20.0,
+      "mm_per_px": 2.783964,
+      "mm_per_px_dev_pct": 1.785,
+      "floor_mm": 0.11523777271766422,
+      "floor_px": 0.04139341088420531,
+      "n_windows": 10,
+      "cal_valid": 0,
+      "legacy_valid": 10,
+      "windows": [
+        {
+          "seg": 0,
+          "t0": 0.0,
+          "cal_valid": false,
+          "legacy_valid": true,
+          "f1_cal": null,
+          "f1_legacy": 0.03333333333333286,
+          "failed": [
+            "G0",
+            "G3"
+          ],
+          "reason": "未通过：G0/G3"
+        },
+        {
+          "seg": 1,
+          "t0": 30.0,
+          "cal_valid": false,
+          "legacy_valid": true,
+          "f1_cal": null,
+          "f1_legacy": 0.13333333333333144,
+          "failed": [
+            "G0",
+            "G2",
+            "G3"
+          ],
+          "reason": "未通过：G0/G2/G3"
+        },
+        {
+          "seg": 2,
+          "t0": 60.0,
+          "cal_valid": false,
+          "legacy_valid": true,
+          "f1_cal": null,
+          "f1_legacy": 0.06666666666667045,
+          "failed": [
+            "G0",
+            "G2",
+            "G3"
+          ],
+          "reason": "未通过：G0/G2/G3"
+        },
+        {
+          "seg": 3,
+          "t0": 90.0,
+          "cal_valid": false,
+          "legacy_valid": true,
+          "f1_cal": null,
+          "f1_legacy": 0.03333333333333523,
+          "failed": [
+            "G2",
+            "G3"
+          ],
+          "reason": "未通过：G2/G3"
+        },
+        {
+          "seg": 4,
+          "t0": 120.0,
+          "cal_valid": false,
+          "legacy_valid": true,
+          "f1_cal": null,
+          "f1_legacy": 0.6333333333331893,
+          "failed": [
+            "G2",
+            "G3"
+          ],
+          "reason": "未通过：G2/G3"
+        },
+        {
+          "seg": 5,
+          "t0": 150.0,
+          "cal_valid": false,
+          "legacy_valid": true,
+          "f1_cal": null,
+          "f1_legacy": 0.033333333333325756,
+          "failed": [
+            "G2",
+            "G3"
+          ],
+          "reason": "未通过：G2/G3"
+        },
+        {
+          "seg": 6,
+          "t0": 180.0,
+          "cal_valid": false,
+          "legacy_valid": true,
+          "f1_cal": null,
+          "f1_legacy": 1.9999999999995453,
+          "failed": [
+            "G2",
+            "G3"
+          ],
+          "reason": "未通过：G2/G3"
+        },
+        {
+          "seg": 7,
+          "t0": 210.0,
+          "cal_valid": false,
+          "legacy_valid": true,
+          "f1_cal": null,
+          "f1_legacy": 0.033333333333325756,
+          "failed": [
+            "G3"
+          ],
+          "reason": "未通过：G3"
+        },
+        {
+          "seg": 8,
+          "t0": 240.0,
+          "cal_valid": false,
+          "legacy_valid": true,
+          "f1_cal": null,
+          "f1_legacy": 0.033333333333325756,
+          "failed": [
+            "G0",
+            "G3"
+          ],
+          "reason": "未通过：G0/G3"
+        },
+        {
+          "seg": 9,
+          "t0": 270.0,
+          "cal_valid": false,
+          "legacy_valid": true,
+          "f1_cal": null,
+          "f1_legacy": 0.033333333333325756,
+          "failed": [
+            "G0",
+            "G2",
+            "G3"
+          ],
+          "reason": "未通过：G0/G2/G3"
+        }
+      ]
+    }
+  },
+  "verdict": "PASS",
+  "fs_new": 20.0,
+  "fs_dev_pct": 0.0,
+  "floor_new_mm": 0.13463117265846097,
+  "floor_new_px": 0.04761273803952833,
+  "floor_cal_mm": 0.1156,
+  "floor_cal_px": 0.0463,
+  "floor_ratio_mm": 1.16463,
+  "floor_ratio_px": 1.02835,
+  "n_windows": 40,
+  "cal_valid": 0,
+  "legacy_valid": 40,
+  "checks": {
+    "frame_rate": true,
+    "floor_px": true,
+    "floor_mm": true,
+    "zero_false_alarm": true
+  }
+}

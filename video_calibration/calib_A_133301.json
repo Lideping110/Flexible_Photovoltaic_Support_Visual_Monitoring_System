@@ -1,0 +1,475 @@
+{
+  "schema_version": 1,
+  "generated_at": "2026-11-27T09:48:56",
+  "tool": "calibrate_video_single.py",
+  "mode": "single_static_video",
+  "unit": "mm",
+  "scope": {
+    "signal": "cum_dx_mm/cum_dy_mm（0 阶累计位移，视觉天然量；不做阶次变换）",
+    "preprocess": "窗内 去尖峰→去趋势→0.3Hz 高通（复用 frequency_gate，与生产同口径）",
+    "lighting_temperature": "未纳入标定（单一静止视频、单一光照条件）",
+    "note": "本脚本只标定频率提取可信度门控（本底+四门+频带），不产出索力/挠度物理参数"
+  },
+  "sensor": {
+    "id": "marker_cam_01",
+    "model": "camera",
+    "rate_hz": 20.0,
+    "axis_default": "dy",
+    "mm_per_px": 2.735146
+  },
+  "source": [
+    {
+      "file": "displacement_A.jsonl",
+      "sha256": "520a4347b5faa8cb4a3a7a430452fe4aa41aca1404cf4c42929319c8ea338342",
+      "pid": "M1",
+      "rows": 12278
+    },
+    {
+      "file": "displacement_A.jsonl",
+      "sha256": "520a4347b5faa8cb4a3a7a430452fe4aa41aca1404cf4c42929319c8ea338342",
+      "pid": "M2",
+      "rows": 12278
+    }
+  ],
+  "video_desc": "2026-11-27 视频A capture_20261126_133301.mp4 legacy产物 2靶标",
+  "levels": {
+    "L1_sensor": {
+      "health": {
+        "n_pids": 2,
+        "n_samples": 12278,
+        "duration_s": 306.95,
+        "fs_hz": 20.0,
+        "dt_median_s": 0.05,
+        "irregular_dt_count": 0,
+        "irregular_dt_pct": 0.0,
+        "frame_span_total": 12278,
+        "frame_lost_total": 0,
+        "frame_loss_pct": 0.0,
+        "frame_jump_events": 0,
+        "id_switches_total": 0,
+        "continuous_bad_total": 8,
+        "continuous_bad_pct": 0.065,
+        "fs_mismatch": false,
+        "mm_calibration_ready": true,
+        "mm_per_px_median": 2.735146,
+        "quant_step_px": 6.1e-05,
+        "quant_step_mm": 0.000167,
+        "id_steps_total": 777,
+        "id_steps_ratio": 0.063284,
+        "per_pid": [
+          {
+            "pid": "M1",
+            "fs_hz": 20.0,
+            "n_valid": 6139,
+            "duration_s": 307.0,
+            "mm_per_px": 2.465483,
+            "conf_mean": 0.9417,
+            "id_steps": 224,
+            "max_gap_s": 0.05,
+            "frame_span": 6139,
+            "frame_lost": 0,
+            "frame_jump_events": 0,
+            "id_switches": 0,
+            "cont_bad": 2,
+            "drift_mm": -0.4183
+          },
+          {
+            "pid": "M2",
+            "fs_hz": 20.0,
+            "n_valid": 6139,
+            "duration_s": 307.0,
+            "mm_per_px": 3.004808,
+            "conf_mean": 0.9181,
+            "id_steps": 553,
+            "max_gap_s": 0.05,
+            "frame_span": 6139,
+            "frame_lost": 0,
+            "frame_jump_events": 0,
+            "id_switches": 0,
+            "cont_bad": 6,
+            "drift_mm": -1.3942
+          }
+        ],
+        "axis_column": "cum位移(mm)",
+        "segments": 2,
+        "per_segment_s": [
+          307.0,
+          307.0
+        ],
+        "total_duration_s": 613.9,
+        "usable_window_s": 600.0,
+        "wasted_tail_s": 13.9,
+        "independent_windows": 20,
+        "min_minutes_required": 5.0,
+        "min_segments_recommended": 3
+      },
+      "noise": {
+        "noise_floor_px": 0.0469,
+        "noise_floor_mm": 0.1156,
+        "noise_floor_mg": 0.0469,
+        "unit": "px",
+        "definition": "预处理(去尖峰→去趋势→0.3Hz高通)后逐30s窗 RMS 的 10 分位，px 域（与生产 gate_core G0 判定域一致）；mm 域值仅作体检",
+        "n_windows": 20,
+        "pre_rms_mean_px": 0.0659,
+        "window_rms_px": [
+          0.0622,
+          0.0455,
+          0.0569,
+          0.0489,
+          0.0475,
+          0.047,
+          0.0542,
+          0.1111,
+          0.047,
+          0.0463,
+          0.088,
+          0.0577,
+          0.0703,
+          0.0565,
+          0.0743,
+          0.0913,
+          0.0664,
+          0.1063,
+          0.0579,
+          0.082
+        ],
+        "abs_percentile_px": {
+          "p50": 0.0324,
+          "p95": 0.1448,
+          "p99": 0.2522,
+          "max": 0.5249
+        },
+        "p10_se_px": 0.0007,
+        "p10_bias_pct": -3.36,
+        "pre_rms_mean_mm": 0.1827,
+        "window_rms_mm": [
+          0.1534,
+          0.1121,
+          0.1403,
+          0.1206,
+          0.1171,
+          0.1159,
+          0.1336,
+          0.274,
+          0.1158,
+          0.1143,
+          0.2645,
+          0.1735,
+          0.2113,
+          0.1698,
+          0.2233,
+          0.2742,
+          0.1996,
+          0.3195,
+          0.1741,
+          0.2464
+        ],
+        "raw_std_mm": 0.6976,
+        "raw_std_vs_floor_pct": 503.37,
+        "lag1_autocorr": 0.0392,
+        "white_like": true,
+        "white_like_basis": "预处理残差的一阶差分（cum 位移积分后 lag1 天然高，不作判据）；视觉 cum 链路该值仅诊断，不作 READY 门槛",
+        "lag1_autocorr_cumulative": 0.8171,
+        "lag1_raw_cum_diff": -0.1811,
+        "quant_step_mm": 0.000167,
+        "per_pid_floor_mm": {
+          "M1": 0.114,
+          "M2": 0.1731
+        },
+        "per_pid_floor_spread": 1.52,
+        "per_pid_floor_px": {
+          "M1": 0.0463,
+          "M2": 0.0576
+        },
+        "per_pid_floor_spread_px": 1.24,
+        "domain_compare": {
+          "spread_px": 1.24,
+          "spread_mm": 1.52,
+          "spread_ratio_mm_over_px": 1.23,
+          "per_pid_mm_per_px": {
+            "M1": 2.465483,
+            "M2": 3.004808
+          },
+          "conclusion": "px 域差异与 mm 域接近 → 差异来自靶标自身亚像素噪声，G0 仍需靶标级本底",
+          "caveat": "仅凭本段静止视频的 px 域差异小，尚不足以证明跨光照/跨距离下 px 本底恒定；需多相机/多光照补标后再决定是否正式改相机级"
+        }
+      }
+    },
+    "L2_thresholds": {
+      "false_alarm": {
+        "n_trials": 150,
+        "n_independent_windows": 20,
+        "pseudo_replication_factor": 7.5,
+        "g1_ratio_p50": 46.69,
+        "g1_ratio_p995": 161.32,
+        "g1_ratio_p999": 161.32,
+        "g1_ratio_max": 161.32,
+        "g1_synthetic_p999": 4.103,
+        "g1_synthetic_max": 4.16,
+        "g1_boundary_sigma_px": 0.0661,
+        "g1_boundary_p999": 4.251,
+        "g1_boundary_max": 4.35,
+        "static_f1_max_hz": 1.03,
+        "drift_edge_hz": 1.18,
+        "g0_rms_p50_px": 0.0577,
+        "g0_rms_p999_px": 0.1111,
+        "g0_rms_max_px": 0.1111,
+        "g1_source": "boundary_white_noise",
+        "derived_g1": 8.5,
+        "recommended_g1": 8.5,
+        "margin_to_production": 0.06,
+        "derived_g0_factor": 1.41,
+        "note": "G1 = max(6, 边界白噪(sigma=G0阈值) peak_ratio p99.9 × 2)。边界白噪代表「刚好能过 G0 的最弱非信号」，G1 只需拦住它；实测静止窗 p99.9 含 0.3~1Hz 慢漂，仅作诊断。G0 = 典型窗RMS(p50)×1.15/本底(p10)，只做粗幅值下限（旧 p99.9 极端分位会砍灵敏度）。G3 绝对下限取静止窗 f1 上沿×1.15。换 nperseg_s / f_lo / f_hi / 帧率会改变带内格点数，必须重标"
+      },
+      "injection": {
+        "n_cases": 110,
+        "amplitudes_rel": [
+          0.499,
+          1.0,
+          1.128,
+          1.41,
+          1.691,
+          2.0,
+          2.115,
+          2.819,
+          3.0,
+          5.001
+        ],
+        "amplitudes_nf_grid": [
+          0.5,
+          1.0,
+          2.0,
+          3.0,
+          5.0
+        ],
+        "amplitudes_px": [
+          0.0234,
+          0.0469,
+          0.0529,
+          0.0661,
+          0.0793,
+          0.0938,
+          0.0992,
+          0.1322,
+          0.1407,
+          0.2345
+        ],
+        "frequencies_hz": [
+          0.2,
+          0.3,
+          0.5,
+          0.8,
+          1.0,
+          1.5,
+          2.0,
+          3.0,
+          4.0,
+          6.0,
+          8.0
+        ],
+        "min_detect_amp": {
+          "0.2": {
+            "rel": 0.0,
+            "px": 0.0
+          },
+          "0.3": {
+            "rel": 0.0,
+            "px": 0.0
+          },
+          "0.5": {
+            "rel": 0.0,
+            "px": 0.0
+          },
+          "0.8": {
+            "rel": 0.0,
+            "px": 0.0
+          },
+          "1.0": {
+            "rel": 0.0,
+            "px": 0.0
+          },
+          "1.5": {
+            "rel": 1.13,
+            "px": 0.0529
+          },
+          "2.0": {
+            "rel": 1.0,
+            "px": 0.0469
+          },
+          "3.0": {
+            "rel": 1.13,
+            "px": 0.0529
+          },
+          "4.0": {
+            "rel": 1.0,
+            "px": 0.0469
+          },
+          "6.0": {
+            "rel": 1.0,
+            "px": 0.0469
+          },
+          "8.0": {
+            "rel": 1.0,
+            "px": 0.0469
+          }
+        },
+        "stable_at_3xfloor_hz": [
+          1.5,
+          2.0,
+          3.0,
+          4.0,
+          6.0,
+          8.0
+        ],
+        "stable_at_ref_amp_hz": [
+          1.5,
+          2.0,
+          3.0,
+          4.0,
+          6.0,
+          8.0
+        ],
+        "ref_amp_px": 0.0992,
+        "ref_amp_note": "参考幅度 = 1.5×G0 阈值（刚越过幅度门）",
+        "f_true_min_hz": 1.5,
+        "slow_wave_false_valid_hz": [
+          1.5,
+          2.0,
+          3.0,
+          4.0,
+          6.0,
+          8.0
+        ],
+        "slow_wave_amp_px": 0.3752,
+        "slow_wave_false_valid_lowband_hz": [],
+        "injected_valid_cv_p99": 0.10648,
+        "cv_legacy_grid_floor": 0.04444,
+        "derived_g2_cv_max": 0.108,
+        "recommended_g2_cv_max": 0.108,
+        "method_limit": "四门只判「窗内是否存在稳定窄带峰」，不判「这个峰是不是结构模态」。视觉链路中检测框闪烁、JPEG/H.264 块效应等也可能形成窄带峰，必须靠跨窗一致性、报警复核等外部证据补判。",
+        "low_freq_sensitivity": "0.3Hz 高通与 f_lo 重合，低于 f_lo 的注入会被滤波代价抬高检出阈值；0.2Hz 档预期检不出，属滤波设计代价而非缺陷。",
+        "welch_delta_f_hz": 0.12579,
+        "nyquist_hz": 10.0,
+        "n_windows_pool": 20,
+        "base_window_rms_px": 0.0578,
+        "synthetic_only": true,
+        "note": "注入幅度=本底×(0.5/1/2/3/5)，叠加在真实静止窗上；只验证算法在本视觉本底下的可检出域，不验证相机/支架对真实振动的响应",
+        "g2_applied_cv_max": 0.108,
+        "g0_applied_factor": 1.41,
+        "g1_applied_peak_ratio": 8.5
+      },
+      "confusion_band_hz": [
+        1.2,
+        1.2
+      ],
+      "hardware_excitation": {
+        "status": "NOT_PROVIDED",
+        "file": "",
+        "excitation_hz": 0.0,
+        "windows": 0,
+        "matched": 0,
+        "reason": "未提供已知频率的激励数据；L2 的注入标定为合成信号，只验证算法"
+      }
+    }
+  },
+  "data_sufficiency": {
+    "verdict": "READY",
+    "verdict_meaning": {
+      "READY": "单段 ≥5min 且 ≥10 个完整 30s 窗，本底 + 四门阈值已标定，可供靶标振动分析加载并判定可信度",
+      "INSUFFICIENT": "静止不足 5min 或完整 30s 窗不足 10 个，参数仅供参考，禁止投用"
+    },
+    "total_static_s": 306.95,
+    "segments": 1,
+    "independent_windows": 20,
+    "p10_se_px": 0.0007,
+    "p10_bias_pct": -3.36,
+    "hardware_excitation": "NOT_PROVIDED"
+  },
+  "params": {
+    "fs": 20.0,
+    "unit_scale": 2.735146,
+    "window_s": 30.0,
+    "nperseg_s": 8.0,
+    "n_sub": 4,
+    "min_samples": 32,
+    "min_span_s": 10.0,
+    "detrend": true,
+    "despike": true,
+    "refine_f1": true,
+    "spike_win": 7,
+    "spike_nsig": 6.0,
+    "hp_cutoff": 0.3,
+    "f_lo": 0.3,
+    "f_hi": 9.4,
+    "noise_floor_mg": 0.0469,
+    "g0_rms_factor": 1.41,
+    "g1_peak_ratio": 8.5,
+    "g2_mode": "band",
+    "g2_band_frac": 0.3,
+    "g2_sub_ratio": 5.0,
+    "g2_min_subs": 3,
+    "g2_cv_max": 0.108,
+    "g3_factor": 2.0,
+    "f1_min_hz": 1.2,
+    "n_peaks": 6,
+    "peak_min_ratio": 3.0,
+    "multi_axis": true,
+    "ma_band_frac": 0.15,
+    "ma_ratio": 5.0,
+    "harmonic_check": true,
+    "harm_ratio": 5.0,
+    "xcheck": true
+  },
+  "fingerprint": {
+    "cam_id": "marker_cam_01",
+    "axis_default": "dy",
+    "rate_hz": 20.0,
+    "unit_scale": 2.735146,
+    "mm_per_px": 2.735146,
+    "window_s": 30.0,
+    "nperseg_s": 8.0,
+    "f_lo": 0.3,
+    "f_hi": 9.4
+  },
+  "validity": {
+    "calibrated_on": "2026-11-27",
+    "valid_until": "2027-05-26",
+    "valid_days": 180,
+    "recalibrate_if": [
+      "更换相机/镜头、重新对焦或变焦、改变安装位置或支架",
+      "改变分辨率、帧率、编码参数（码率/关键帧间隔/去畸变开关）",
+      "更换或重训检测/亚像素模型（模型直接改变亚像素噪声分布）",
+      "更换靶标或改变 marker 标定（real_diameter_mm），mm_per_px 偏离标定时 >5%",
+      "环境光照/昼夜温度显著变化（热漂移会改变视觉本底）",
+      "连续 7 天出现 G0 全部 FAIL 或静止段 RMS 漂移 >20%",
+      "超过 valid_until，或相机/支架受过冲击、拆卸、维修"
+    ]
+  },
+  "checks": {
+    "passed": [
+      "静止总时长 306.95s ≥ 300s（5min 最低要求）",
+      "独立 30s 窗 20 ≥ 10 个",
+      "采集丢帧(frame_id 缺失) 0.0% < 5%（跳号 0 次；ts 间隔抖动 0.0% 是处理耗时，仅诊断）",
+      "各靶标帧率一致",
+      "mm 标定就绪（mm_per_px 中位数 2.735146）",
+      "G1=8.5 覆盖边界白噪上界 4.251（sigma=0.0661px，取 2× 余量；实测静止窗 p99.9=161.32 含慢漂，仅诊断）",
+      "G2 未擅自收紧生产基线 8%",
+      "G3 绝对下限 1.2Hz ≥ 慢漂频段上沿 1.18Hz（静止窗 f1 最大 1.03Hz，均属伪峰）",
+      "注入标定检出真信号（参考幅度 0.0992px = 1.5×G0 阈值，最低可检出 1.5Hz）",
+      "跟踪连续性：raw_track_id 跳变 0 次、continuous 缺失 0.065% < 5%（cum 台阶 6.328% 仅诊断）"
+    ],
+    "warnings": [
+      "G1=8.5 低于传感器版生产基线 10：视觉链路边界白噪p99.9 仅 4.251，10 属传感器 ADC 经验值，不适用；已按边界白噪 2× 定阈，若现场出现持续性窄带干扰需按实测补标",
+      "cum 一阶差分检出 777 个超 5σ 台阶（6.328%）：是亚像素中心抖动/短时遮挡，非 ID 切换（raw_track_id 实际跳变 0 次）。台阶会抬高本底，建议核对该段跟踪连续性",
+      "本底一阶差分 lag1=0.0392：cum 是 0 阶积分量，经跟踪器平滑后差分天然非独立白噪（原始 cum 差分 lag1=-0.1811），传感器 ADC 的 |lag1|<0.15 判据不适用；该值仅诊断不作充分性判据，G0 阈值走实测静止窗 RMS 的 p99.9、G1 阈值走边界白噪 p99.9，均不依赖白噪假设",
+      "靶标累计漂移最大 1.3942mm > 5×本底：视频疑似非完全静止，本底已含慢漂成分（去趋势可压，但会抬高 G0）",
+      "本底采用 p10（20 窗，系统性偏低 -3.36%、标准误 0.0007px），偏低量已由 G0 因子 1.41 补偿",
+      "虚警基线实测仅 20 个独立窗，重采样 7.5× 属伪重复；已用独立合成白噪交叉验证",
+      "无真实激励段：注入扫描为合成信号，只验证算法，不验证相机支架谐振/图像压缩对真实振动的畸变（可选 --excitation）",
+      "方法固有局限：四门只判有无稳定窄带峰，不判峰的物理来源",
+      "低频灵敏度下降：0.3Hz 高通与 f_lo 重合，低于 f_lo 的注入会被滤波代价抬高检出阈值；0.2Hz 档预期检不出，属滤波设计代价而非缺陷。",
+      "单一静态视频无法覆盖昼夜光照/温度变化：户外部署建议跨光照条件补标"
+    ],
+    "failed": []
+  }
+}

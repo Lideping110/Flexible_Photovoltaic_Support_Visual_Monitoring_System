@@ -9,8 +9,12 @@
    现有主链路/看板行为不变；有标定 JSON 时才启用 G0/G1/G2/G3。
 3. 判定域用 px（相机级本底），输出幅值仍用 mm（报警/物理量口径不变）。
    mm_per_px 只做换算，不参与门控阈值。
-4. 丢帧率门与 ID 连续性门不依赖标定阈值：口径固定（丢帧<5%、max_gap<=3dt；
-   raw_track_id 无跳变、cum 台阶 0、continuous 不缺），数据不足时标 SKIP 而非 FAIL。
+4. 丢帧率门与 ID 连续性门不依赖标定阈值，且必须用视觉链路自己的口径
+   （与 calibrate_video_single.py 同源）：
+   - 丢帧 = frame_id 缺失帧占比 < 5%；ts 间隔抖动只是处理耗时，仅诊断。
+   - ID 切换 = raw_track_id 跳变 + continuous 缺失 < 5%；cum 一阶差分台阶
+     是亚像素中心抖动/短时遮挡，不是 ID 切换，仅诊断。
+   数据不足时标 SKIP 而非 FAIL。
 
 门的定义（与 sensor/accelerometer 对齐，阈值来自标定 JSON 的 params）
 ---------------------------------------------------------------------
@@ -18,8 +22,8 @@
   G1 显著性门   带内 Welch 峰/中位数 >= g1_peak_ratio
   G2 稳定性门   四个子窗带内主频 CV <= g2_cv_max
   G3 频率下限   f1 > max(g3_factor / 窗跨度, f1_min_hz)
-  丢帧率门      irregular_dt_pct < 5%, max_gap <= 3*dt
-  ID 连续性门   raw_track_id 不跳变 + cum 一阶差分无 6σ 台阶 + continuous 率 < 5%
+  丢帧率门      frame_id 缺失帧占比 < 5%（ts 抖动仅诊断）
+  ID 连续性门   raw_track_id 不跳变 + continuous 缺失率 < 5%（cum 台阶仅诊断）
 
 标定的 JSON 结构由 calibrate_video_single.py 产出（schema_version=1，params 键名
 与 fg.DEFAULTS 一致）。加载时只取 params + fingerprint，指纹不一致给 warnings。
@@ -42,9 +46,8 @@ import frequency_gate as fg  # noqa: E402
 # 未标定时的固定口径（对应 sensor 生产基线，不作为判定、只作为"未启用"标记）
 _LEGACY = {"snr": 5.0, "window_s": 30.0, "min_samples": 32, "min_span_s": 10.0}
 
-DROP_MAX_PCT = 5.0          # 丢帧率门：不规则间隔占比上限
-DROP_MAX_GAP_FACTOR = 3.0   # 丢帧率门：最大间隔 <= 3×dt
-ID_STEP_NSIG = 6.0          # ID 连续性门：cum 台阶判定倍数（稳健 MAD σ）
+DROP_MAX_PCT = 5.0          # 丢帧率门：frame_id 缺失帧占比上限（视觉链路）
+ID_STEP_NSIG = 6.0          # ID 连续性门：cum 台阶诊断倍数（不参与判定）
 _ID_BAD_RATE_MAX = 0.05     # ID 连续性门：continuous=False 占比上限
 
 
@@ -263,27 +266,37 @@ def evaluate_window(t, y_px, y_mm, snr_min, *, cfg=None, meta=None,
 
 
 def _drop_gate(meta, t, dt):
-    """丢帧率门：frame_id 跳号（采集丢帧）优先，时间戳不规则率兜底。"""
+    """丢帧率门：frame_id 缺失帧占比。视觉链路「检测成功才记录」，ts 间隔
+    受推理/解码/落盘耗时抖动（实测 0.013~0.068s，中位 0.050s），不能沿用
+    传感器 ADC 的「ts 间隔偏离>25%=丢帧」口径——那会把 25% 正常抖动误判
+    成丢帧，也会把 1 帧短时丢失（跳号=1）整窗作废。校准脚本同口径。"""
     out = {"status": "SKIP", "reason": "无 frame_id 元数据"}
     if not meta or not meta.get("frame_id") or len(meta["frame_id"]) < 4:
         return out
-    fid = np.asarray(meta["frame_id"], dtype=float)
+    fid = np.asarray(meta["frame_id"], dtype=np.int64)
     gaps = np.diff(fid)
+    span = int(fid[-1] - fid[0]) + 1 if len(fid) else 0
+    lost = int(np.sum(np.maximum(gaps - 1, 0)))
+    pct = round(100.0 * lost / max(span, 1), 3)
+    jump = int(np.sum(gaps > 1))
     uneven = np.diff(np.asarray(t, dtype=float))
-    irreg = int(np.sum(uneven > 1.25 * dt)) if dt > 0 else 0
-    pct = round(100.0 * irreg / max(len(uneven), 1), 3)
-    max_gap = round(float(np.max(uneven)), 5) if len(uneven) else 0.0
-    jump = int(np.sum(gaps > 1.5))
-    ok = pct < DROP_MAX_PCT and max_gap <= DROP_MAX_GAP_FACTOR * dt and jump == 0
-    out.update({"status": "PASS" if ok else "FAIL", "irregular_pct": pct,
-                "max_gap_s": max_gap, "dt_s": round(dt, 5), "frame_jumps": jump,
-                "reason": (f"不规则{pct}%/{DROP_MAX_PCT}% 最大间隔{max_gap}s/{round(DROP_MAX_GAP_FACTOR*dt,5)}s "
-                           f"跳号{jump}")})
+    jitter = int(np.sum(uneven > 1.25 * dt)) if dt > 0 else 0
+    jitter_pct = round(100.0 * jitter / max(len(uneven), 1), 3)
+    ok = pct < DROP_MAX_PCT
+    out.update({"status": "PASS" if ok else "FAIL", "frame_lost": lost,
+                "frame_span": span, "frame_loss_pct": pct,
+                "jump_events": jump, "ts_jitter_pct": jitter_pct,
+                "dt_s": round(dt, 5),
+                "reason": (f"frame_id 缺失{lost}/{span}={pct}%/{DROP_MAX_PCT}% "
+                           f"跳号{jump}；ts抖动{jitter_pct}%仅诊断")})
     return out
 
 
 def _id_gate(meta, y_px):
-    """ID 连续性门：raw_track_id 跳变、cum 台阶（MAD 6σ）、continuous 缺失率。"""
+    """ID 连续性门：raw_track_id 跳变 + continuous 缺失率。cum 一阶差分
+    台阶是亚像素中心抖动/短时遮挡（实测全程 raw_track_id 0 次跳变却有
+    5% 台阶），沿用传感器「台阶=ID 跳变」口径会误杀绝大多数窗；台阶
+    保留为诊断字段，不参与判定。校准脚本同口径。"""
     out = {"status": "SKIP", "reason": "无 ID 元数据"}
     if not meta or not meta.get("raw_track_id") or len(meta["raw_track_id"]) < 4:
         return out
@@ -297,8 +310,10 @@ def _id_gate(meta, y_px):
     bad_rate = 0.0
     if cont and len(cont) >= 4:
         bad_rate = float(np.sum(~np.asarray(cont, dtype=bool)) / len(cont))
-    ok = switches == 0 and steps == 0 and bad_rate < _ID_BAD_RATE_MAX
+    ok = switches == 0 and bad_rate < _ID_BAD_RATE_MAX
     out.update({"status": "PASS" if ok else "FAIL", "raw_switches": switches,
-                "cum_steps": steps, "continuous_bad_rate": round(bad_rate, 4),
-                "reason": f"raw跳变{switches} 台阶{steps} 断续{bad_rate*100:.1f}%"})
+                "cum_steps": steps,
+                "continuous_bad_rate": round(bad_rate, 4),
+                "reason": (f"raw跳变{switches} 断续{bad_rate*100:.1f}%/"
+                           f"{_ID_BAD_RATE_MAX*100:.0f}%（cum台阶{steps}仅诊断）")})
     return out
